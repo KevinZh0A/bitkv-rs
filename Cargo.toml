@@ -1,0 +1,12 @@
+[package]
+name = "bitkv-rs"
+version = "0.0.1"
+author = "kevin zhang"
+description = "A k/v store API inspired by bitcask"
+edition = "2021"
+
+[dependencies]
+env_logger = "0.11.2"
+log = "0.4.21"
+parking_lot = "0.12.1"
+thiserror = "1.0.57"
