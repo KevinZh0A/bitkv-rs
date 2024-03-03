@@ -1,12 +1,11 @@
 pub mod btree;
 
 use crate::data::log_record::LogRecordPos;
-use std::io::Result;
 
-// Abstract Indexer interface, to be implemented pluggable data structure
+// Abstract interface specifies methods for interchangeable indexing data structures
 pub trait Indexer {
     /// Store key's position into indexer
-    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Result<()>;
+    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool;
 
     /// Retrieve key's position
     fn get(&self, key: Vec<u8>) -> Option<LogRecordPos>;

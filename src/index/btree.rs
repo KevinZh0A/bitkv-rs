@@ -1,7 +1,6 @@
 use crate::data::log_record::LogRecordPos;
 use parking_lot::RwLock;
 use std::collections::BTreeMap;
-use std::io::Result;
 use std::sync::Arc;
 
 use super::Indexer;
@@ -21,10 +20,10 @@ impl BTree {
 }
 
 impl Indexer for BTree {
-    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Result<()> {
+    fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool {
         let mut write_guard = self.tree.write();
         write_guard.insert(key, pos);
-        Ok(())
+        true
     }
 
     fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
@@ -54,7 +53,7 @@ mod tests {
                 offset: 10,
             },
         );
-        assert!(res1.is_ok());
+        assert!(res1);
 
         let res2 = bt.put(
             "aa".as_bytes().to_vec(),
@@ -63,7 +62,7 @@ mod tests {
                 offset: 22,
             },
         );
-        assert!(res2.is_ok());
+        assert!(res2);
     }
 
     #[test]
@@ -76,7 +75,7 @@ mod tests {
                 offset: 10,
             },
         );
-        assert!(res1.is_ok());
+        assert!(res1);
 
         let res2 = bt.put(
             "aa".as_bytes().to_vec(),
@@ -85,7 +84,7 @@ mod tests {
                 offset: 22,
             },
         );
-        assert!(res2.is_ok());
+        assert!(res2);
 
         let pos1 = bt.get("".as_bytes().to_vec()).unwrap();
         println!("{:?}", pos1);
@@ -117,7 +116,7 @@ mod tests {
                 offset: 10,
             },
         );
-        assert!(res1.is_ok());
+        assert!(res1);
 
         let res2 = bt.put(
             "aa".as_bytes().to_vec(),
@@ -126,7 +125,7 @@ mod tests {
                 offset: 22,
             },
         );
-        assert!(res2.is_ok());
+        assert!(res2);
 
         let res3 = bt.delete("".as_bytes().to_vec());
         assert!(res3);
