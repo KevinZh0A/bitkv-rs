@@ -1,25 +1,85 @@
 use crate::{
     data::{
-        data_file::DataFile,
+        data_file::{DataFile, DATA_FILE_NAME_SUFFIX},
         log_record::{LogRecord, LogRecordPos, LogRecordType},
     },
     errors::{Errors, Result},
-    index::Indexer,
+    index,
     option::Options,
 };
 use bytes::Bytes;
+use log::warn;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+
+const INITIAL_FILE_ID: u32 = 0;
 
 // Storage Engine
 pub struct Engine {
     options: Arc<Options>,
     active_data_file: Arc<RwLock<DataFile>>, // current active data file
     old_data_files: Arc<RwLock<HashMap<u32, DataFile>>>, // old data files
-    index: Box<dyn Indexer>,                 // data cache index
+    index: Box<dyn index::Indexer>,                 // data cache index
+    file_ids: Vec<u32>, // database setup file id list, only used for setup, not allowed to be modified or updated somewhere else
 }
 
 impl Engine {
+    /// open bitkv storage engine instance
+    pub fn open(opts: Options) -> Result<Self> {
+        // check user options
+        if let Some(e) = check_options(&opts) {
+            return Err(e);
+        };
+
+        let options = opts.clone();
+        // determine if dir is valid, dir does not exist, create a new one
+        let dir_path = options.dir_path.clone();
+        if !dir_path.is_dir() {
+            if let Err(e) = fs::create_dir(dir_path.as_path()) {
+                warn!("failed to create database directory error: {}", e);
+                return Err(Errors::FailedToCreateDatabaseDir);
+            };
+        }
+
+        // load data file
+        let mut data_files = load_data_files(dir_path.clone())?;
+
+        // set file id info
+        let mut file_ids = Vec::new();
+        for v in data_files.iter() {
+            file_ids.push(v.get_file_id());
+        }
+
+        // save old file into older_files
+        let mut older_files = HashMap::new();
+        if data_files.len() > 1 {
+            for _ in 0..=data_files.len() - 2 {
+                let file = data_files.pop().unwrap();
+                older_files.insert(file.get_file_id(), file);
+            }
+        }
+
+        // Retrieve the active data file, which is the last one in the data_files
+        let active_file = match data_files.pop() {
+            Some(v) => v,
+            None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
+        };
+
+        // create a new engine instance
+        let engine = Self {
+            options: Arc::new(opts),
+            active_data_file: Arc::new(RwLock::new(active_file)),
+            old_data_files: Arc::new(RwLock::new(older_files)),
+            index: Box::new(index::new_indexer(options.index_type)),
+            file_ids,
+        };
+
+        // load index from data files
+        engine.load_index_from_data_files()?;
+
+        Ok(engine)
+    }
+
     /// store a key/value pair, ensuring key isn't null.
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         // if the key is valid
@@ -65,14 +125,17 @@ impl Engine {
         let active_file = self.active_data_file.read();
         let oldre_files = self.old_data_files.read();
         let log_record = match active_file.get_file_id() == log_record_pos.file_id {
-            true => active_file.read_log_record(log_record_pos.offset)?,
+            true => active_file.read_log_record(log_record_pos.offset)?.record,
             false => {
                 let data_file = oldre_files.get(&log_record_pos.file_id);
                 if data_file.is_none() {
                     // Returns the error if the corresponding data file is not found.
                     return Err(Errors::DataFileNotFound);
                 }
-                data_file.unwrap().read_log_record(log_record_pos.offset)?
+                data_file
+                    .unwrap()
+                    .read_log_record(log_record_pos.offset)?
+                    .record
             }
         };
 
@@ -127,4 +190,125 @@ impl Engine {
             offset: write_off,
         })
     }
+
+    /// load memory index from data files
+    /// tranverse all data files, and process each log record
+    fn load_index_from_data_files(&self) -> Result<()> {
+        // if data_files is empty then return
+        if self.file_ids.is_empty() {
+            return Ok(());
+        }
+        let active_file = self.active_data_file.read();
+        let old_files = self.old_data_files.read();
+
+        // tranverse each file_id, retrieve data file and load its data
+        for (i, file_id) in self.file_ids.iter().enumerate() {
+            let mut offset = 0;
+            loop {
+                // read data in loop
+                let log_record_res = match *file_id == active_file.get_file_id() {
+                    true => active_file.read_log_record(offset),
+                    _ => {
+                        let data_file = old_files.get(file_id).unwrap();
+                        data_file.read_log_record(offset)
+                    }
+                };
+
+                let (log_record, size) = match log_record_res {
+                    Ok(result) => (result.record, result.size),
+                    Err(e) => {
+                        if e == Errors::ReadDataFileEOF {
+                            break;
+                        }
+                        return Err(e);
+                    }
+                };
+
+                // construct mem index
+                let lof_record_pos = LogRecordPos {
+                    file_id: *file_id,
+                    offset,
+                };
+
+                match log_record.rec_type {
+                    LogRecordType::NORMAL => {
+                        self.index.put(log_record.key.to_vec(), lof_record_pos);
+                    }
+                    LogRecordType::DELETED => {
+                        self.index.delete(log_record.key);
+                    }
+                }
+
+                // offset move, read next log record
+                offset += size;
+            }
+
+            // set active file offset
+            if i == self.file_ids.len() - 1 {
+                active_file.set_write_off(offset);
+            }
+        }
+        Ok(())
+    }
+}
+
+// load data files from database directory
+fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
+    // read database directory
+    let dir = fs::read_dir(dir_path.clone());
+    if dir.is_err() {
+        return Err(Errors::FailedToReadDatabaseDir);
+    }
+
+    let mut file_ids: Vec<u32> = Vec::new();
+    let mut data_files: Vec<DataFile> = Vec::new();
+
+    for file in dir.unwrap() {
+        if let Ok(entry) = file {
+            // Retrieve file name
+            let file_os_str = entry.file_name();
+            let file_name = file_os_str.to_str().unwrap();
+
+            // determine if file name ends up with .data
+            if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {
+                let splited_names: Vec<&str> = file_name.split(".").collect();
+                let file_id = match splited_names[0].parse::<u32>() {
+                    Ok(fid) => fid,
+                    Err(_) => {
+                        return Err(Errors::DatabaseDirectoryCorrupted);
+                    }
+                };
+
+                file_ids.push(file_id);
+            }
+        }
+    }
+
+    // if data file is empty then return
+    if file_ids.is_empty() {
+        return Ok(data_files);
+    }
+
+    // sort file_ids, loading from small to large
+    file_ids.sort();
+
+    // traverse file_ids, sequentially loading data files
+    for file_id in file_ids.iter() {
+        let data_file = DataFile::new(dir_path.clone(), *file_id)?;
+        data_files.push(data_file);
+    }
+    Ok(data_files)
+}
+
+fn check_options(opts: &Options) -> Option<Errors> {
+    let dir_path = opts.dir_path.to_str();
+    if dir_path.is_none() || dir_path.unwrap().is_empty() {
+        return Some(Errors::DirPathIsEmpty);
+    }
+
+    if opts.data_file_size <= 0 {
+        return Some(Errors::DataFileSizeTooSmall);
+    }
+
+    None
 }

@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_file_io_sync() {
-        let path = PathBuf::from("/tmp/a.data");
+        let path = PathBuf::from("/tmp/c.data");
         let fio_res = FileIO::new(path.clone());
         assert!(fio_res.is_ok());
 
