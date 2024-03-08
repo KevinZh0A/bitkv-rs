@@ -1,6 +1,5 @@
 pub mod btree;
 
-
 use crate::{data::log_record::LogRecordPos, option::IndexType};
 
 use crate::index::btree::BTree;
@@ -21,6 +20,5 @@ pub fn new_indexer(index_type: &IndexType) -> impl Indexer {
     match *index_type {
         IndexType::BTree => BTree::new(),
         IndexType::SkipList => todo!(),
-        _ => panic!("unsupported index type"),
     }
 }
