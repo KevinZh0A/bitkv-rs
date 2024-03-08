@@ -17,8 +17,8 @@ pub trait Indexer {
     fn delete(&self, key: Vec<u8>) -> bool;
 }
 
-pub fn new_indexer(index_type: IndexType) -> impl Indexer {
-    match index_type {
+pub fn new_indexer(index_type: &IndexType) -> impl Indexer {
+    match *index_type {
         IndexType::BTree => BTree::new(),
         IndexType::SkipList => todo!(),
         _ => panic!("unsupported index type"),

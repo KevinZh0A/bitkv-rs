@@ -14,7 +14,7 @@ pub struct DataFile {
 }
 
 impl DataFile {
-    pub fn new(dir_path: PathBuf, file_id: u32) -> Result<DataFile> {
+    pub fn new(dir_path: &PathBuf, file_id: u32) -> Result<DataFile> {
         todo!()
     }
 
