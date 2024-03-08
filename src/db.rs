@@ -19,7 +19,7 @@ pub struct Engine {
     options: Arc<Options>,
     active_data_file: Arc<RwLock<DataFile>>, // current active data file
     old_data_files: Arc<RwLock<HashMap<u32, DataFile>>>, // old data files
-    index: Box<dyn index::Indexer>,                 // data cache index
+    index: Box<dyn index::Indexer>,          // data cache index
     file_ids: Vec<u32>, // database setup file id list, only used for setup, not allowed to be modified or updated somewhere else
 }
 
@@ -31,9 +31,9 @@ impl Engine {
             return Err(e);
         };
 
-        let options = opts.clone();
+        let options = Arc::new(opts);
         // determine if dir is valid, dir does not exist, create a new one
-        let dir_path = options.dir_path.clone();
+        let dir_path = &options.dir_path;
         if !dir_path.is_dir() {
             if let Err(e) = fs::create_dir(dir_path.as_path()) {
                 warn!("failed to create database directory error: {}", e);
@@ -42,7 +42,7 @@ impl Engine {
         }
 
         // load data file
-        let mut data_files = load_data_files(dir_path.clone())?;
+        let mut data_files = load_data_files(&dir_path)?;
 
         // set file id info
         let mut file_ids = Vec::new();
@@ -62,15 +62,15 @@ impl Engine {
         // Retrieve the active data file, which is the last one in the data_files
         let active_file = match data_files.pop() {
             Some(v) => v,
-            None => DataFile::new(dir_path.clone(), INITIAL_FILE_ID)?,
+            None => DataFile::new(dir_path, INITIAL_FILE_ID)?,
         };
 
         // create a new engine instance
         let engine = Self {
-            options: Arc::new(opts),
+            options: options.clone(),
             active_data_file: Arc::new(RwLock::new(active_file)),
             old_data_files: Arc::new(RwLock::new(older_files)),
-            index: Box::new(index::new_indexer(options.index_type)),
+            index: Box::new(index::new_indexer(&options.index_type)),
             file_ids,
         };
 
@@ -150,7 +150,7 @@ impl Engine {
 
     /// append write data to current active data file
     fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecordPos> {
-        let dir_path = self.options.dir_path.clone();
+        let dir_path = &self.options.dir_path;
 
         // encode input data
         let enc_record = log_record.encode();
@@ -166,11 +166,11 @@ impl Engine {
 
             // insert old data file to hash map
             let mut old_files = self.old_data_files.write();
-            let old_file = DataFile::new(dir_path.clone(), current_fid)?;
+            let old_file = DataFile::new(dir_path, current_fid)?;
             old_files.insert(current_fid, old_file);
 
             // open a new active data file
-            let new_file = DataFile::new(dir_path.clone(), current_fid + 1)?;
+            let new_file = DataFile::new(dir_path, current_fid + 1)?;
             *active_file = new_file;
         }
 
@@ -253,9 +253,9 @@ impl Engine {
 }
 
 // load data files from database directory
-fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
+fn load_data_files(dir_path: &PathBuf) -> Result<Vec<DataFile>> {
     // read database directory
-    let dir = fs::read_dir(dir_path.clone());
+    let dir = fs::read_dir(dir_path);
     if dir.is_err() {
         return Err(Errors::FailedToReadDatabaseDir);
     }
@@ -294,7 +294,7 @@ fn load_data_files(dir_path: PathBuf) -> Result<Vec<DataFile>> {
 
     // traverse file_ids, sequentially loading data files
     for file_id in file_ids.iter() {
-        let data_file = DataFile::new(dir_path.clone(), *file_id)?;
+        let data_file = DataFile::new(dir_path, *file_id)?;
         data_files.push(data_file);
     }
     Ok(data_files)
