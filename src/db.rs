@@ -105,6 +105,37 @@ impl Engine {
         Ok(())
     }
 
+    // delete the data associated with the specified key.
+    pub fn delete(&self, key: Bytes, value: Bytes) -> Result<()> {
+        // if the key is valid
+        if key.is_empty() {
+            return Err(Errors::KeyIsEmpty);
+        }
+
+        // retrieve specified data from index if it not exists then return
+        let pos = self.index.get(key.to_vec());
+        if pos.is_none() {
+            return Ok(());
+        }
+
+        // construct LogRecord
+        let mut record = LogRecord {
+            key: key.to_vec(),
+            value: Default::default(),
+            rec_type: LogRecordType::DELETED,
+        };
+
+        // appending write to active file
+        let log_record_pos = self.append_log_record(&mut record)?;
+
+        // delete key in index
+        let ok = self.index.delete(key.to_vec());
+        if !ok {
+            return Err(Errors::IndexUpdateFailed);
+        }
+        Ok(())
+    }
+
     /// Retrieves the data associated with the specified key.
     pub fn get(&self, key: Bytes) -> Result<Bytes> {
         // if the key is valid
@@ -230,13 +261,15 @@ impl Engine {
                     offset,
                 };
 
-                match log_record.rec_type {
+                let ok = match log_record.rec_type {
                     LogRecordType::NORMAL => {
-                        self.index.put(log_record.key.to_vec(), lof_record_pos);
+                        self.index.put(log_record.key.to_vec(), lof_record_pos)
                     }
-                    LogRecordType::DELETED => {
-                        self.index.delete(log_record.key);
-                    }
+                    LogRecordType::DELETED => self.index.delete(log_record.key),
+                };
+
+                if !ok {
+                    return Err(Errors::IndexUpdateFailed);
                 }
 
                 // offset move, read next log record
