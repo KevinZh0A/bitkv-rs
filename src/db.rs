@@ -273,7 +273,7 @@ impl Engine {
                 }
 
                 // offset move, read next log record
-                offset += size;
+                offset += size as u64;
             }
 
             // set active file offset

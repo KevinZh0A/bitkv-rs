@@ -1,6 +1,10 @@
 pub mod file_io;
 
+use std::path::PathBuf;
+
 use crate::errors::Result;
+
+use self::file_io::FileIO;
 
 /// Abstract IO Management Interface, support different IO type implemented, currently standard IO file supported
 pub trait IOManager: Sync + Send {
@@ -12,4 +16,9 @@ pub trait IOManager: Sync + Send {
 
     /// data persistence
     fn sync(&self) -> Result<()>;
+}
+
+/// Initialize IO manager by filename
+pub fn new_io_manager(filename: &PathBuf) -> Result<impl IOManager> {
+    FileIO::new(filename)
 }
