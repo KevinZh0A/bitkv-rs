@@ -19,7 +19,7 @@ pub struct Engine {
     options: Arc<Options>,
     active_data_file: Arc<RwLock<DataFile>>, // current active data file
     old_data_files: Arc<RwLock<HashMap<u32, DataFile>>>, // old data files
-    index: Box<dyn index::Indexer>,          // data cache index
+    pub(crate) index: Box<dyn index::Indexer>, // data cache index
     file_ids: Vec<u32>, // database setup file id list, only used for setup, not allowed to be modified or updated somewhere else
 }
 
@@ -49,6 +49,8 @@ impl Engine {
         for v in data_files.iter() {
             file_ids.push(v.get_file_id());
         }
+        // adjust file_ids order, let current file id in the first place
+        data_files.reverse();
 
         // save old file into older_files
         let mut older_files = HashMap::new();
@@ -106,7 +108,7 @@ impl Engine {
     }
 
     // delete the data associated with the specified key.
-    pub fn delete(&self, key: Bytes, value: Bytes) -> Result<()> {
+    pub fn delete(&self, key: Bytes) -> Result<()> {
         // if the key is valid
         if key.is_empty() {
             return Err(Errors::KeyIsEmpty);
@@ -126,7 +128,7 @@ impl Engine {
         };
 
         // appending write to active file
-        let log_record_pos = self.append_log_record(&mut record)?;
+        self.append_log_record(&mut record)?;
 
         // delete key in index
         let ok = self.index.delete(key.to_vec());
@@ -138,7 +140,7 @@ impl Engine {
 
     /// Retrieves the data associated with the specified key.
     pub fn get(&self, key: Bytes) -> Result<Bytes> {
-        // if the key is valid
+        // if the key is empty then return
         if key.is_empty() {
             return Err(Errors::KeyIsEmpty);
         }
@@ -152,7 +154,12 @@ impl Engine {
         }
 
         // Retrieves LogRecord from the specified file data.
-        let log_record_pos = pos.unwrap();
+        self.get_value_by_position(&pos.unwrap())
+    }
+
+    /// Retrieves the data by position.
+    pub(crate) fn get_value_by_position(&self, log_record_pos: &LogRecordPos) -> Result<Bytes> {
+        // Retrieves LogRecord from the specified file data.
         let active_file = self.active_data_file.read();
         let oldre_files = self.old_data_files.read();
         let log_record = match active_file.get_file_id() == log_record_pos.file_id {

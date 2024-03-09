@@ -74,7 +74,7 @@ impl DataFile {
             .read(&mut kv_buf, offset + actual_header_size as u64)?;
 
         // construct log record
-        let mut log_record = LogRecord {
+        let log_record = LogRecord {
             key: kv_buf.get(..key_size).unwrap().to_vec(),
             value: kv_buf.get(key_size..kv_buf.len() - 4).unwrap().to_vec(),
             rec_type: LogRecordType::from_u8(rec_type),
@@ -164,5 +164,85 @@ mod tests {
 
         let sync_res = data_file.sync();
         assert!(sync_res.is_ok());
+    }
+
+    #[test]
+    fn test_data_file_read_log_record() {
+        let dir_path = std::env::temp_dir();
+        let data_file_res = DataFile::new(&dir_path, 600);
+        assert!(data_file_res.is_ok());
+        let data_file = data_file_res.unwrap();
+        assert_eq!(data_file.get_file_id(), 600);
+
+        let enc1 = LogRecord {
+            key: "key-a".as_bytes().to_vec(),
+            value: "value-a".as_bytes().to_vec(),
+            rec_type: LogRecordType::NORMAL,
+        };
+        let buf1 = enc1.encode();
+        let write_res1: std::prelude::v1::Result<usize, Errors> = data_file.write(&buf1);
+        assert!(write_res1.is_ok());
+
+        // read from offset 0
+        let read_res1 = data_file.read_log_record(0);
+        assert!(read_res1.is_ok());
+        let read_enc1 = read_res1.ok().unwrap();
+        assert_eq!(enc1.key, read_enc1.record.key);
+        assert_eq!(enc1.value, read_enc1.record.value);
+        assert_eq!(enc1.rec_type, read_enc1.record.rec_type);
+
+        // multiple log records
+        let enc2 = LogRecord {
+            key: "key-b".as_bytes().to_vec(),
+            value: "value-b".as_bytes().to_vec(),
+            rec_type: LogRecordType::NORMAL,
+        };
+        let enc3 = LogRecord {
+            key: "key-c".as_bytes().to_vec(),
+            value: "value-c".as_bytes().to_vec(),
+            rec_type: LogRecordType::NORMAL,
+        };
+
+        // Read from current write offset
+        let buf2 = enc2.encode();
+        let buf3 = enc3.encode();
+
+        let write_res2 = data_file.write(&buf2);
+        assert!(write_res2.is_ok());
+        let write_res3 = data_file.write(&buf3);
+
+        let read_res2 = data_file.read_log_record(19);
+        assert!(read_res2.is_ok());
+        let read_enc2 = read_res2.ok().unwrap();
+        assert_eq!(enc2.key, read_enc2.record.key);
+        assert_eq!(enc2.value, read_enc2.record.value);
+        assert_eq!(enc2.rec_type, read_enc2.record.rec_type);
+
+        let read_res3 = data_file.read_log_record(19 + read_enc2.size as u64);
+        assert!(read_res3.is_ok());
+        let read_enc3 = read_res3.ok().unwrap();
+        assert_eq!(enc3.key, read_enc3.record.key);
+        assert_eq!(enc3.value, read_enc3.record.value);
+        assert_eq!(enc3.rec_type, read_enc3.record.rec_type);
+
+        // read record type deleted
+        let enc4 = LogRecord {
+            key: "key-d".as_bytes().to_vec(),
+            value: "value-d".as_bytes().to_vec(),
+            rec_type: LogRecordType::DELETED,
+        };
+
+        let buf4 = enc4.encode();
+        assert!(write_res3.is_ok());
+        let write_res4: std::prelude::v1::Result<usize, Errors> = data_file.write(&buf4);
+        assert!(write_res4.is_ok());
+
+        let read_res4 =
+            data_file.read_log_record(19 + read_enc2.size as u64 + read_enc3.size as u64);
+        assert!(read_res4.is_ok());
+        let read_enc4 = read_res4.ok().unwrap();
+        assert_eq!(enc4.key, read_enc4.record.key);
+        assert_eq!(enc4.value, read_enc4.record.value);
+        assert_eq!(enc4.rec_type, read_enc4.record.rec_type);
     }
 }
