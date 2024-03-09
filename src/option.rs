@@ -23,3 +23,27 @@ pub enum IndexType {
     /// SkipList index WIP
     SkipList,
 }
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            dir_path: std::env::temp_dir().join("bitkv-rs"),
+            data_file_size: 256 * 1024 * 1024, // 256MB
+            sync_writes: false,
+            index_type: IndexType::BTree,
+        }
+    }
+}
+pub struct IteratorOptions {
+    pub prefix: Vec<u8>,
+    pub reverse: bool,
+}
+
+impl Default for IteratorOptions {
+    fn default() -> Self {
+        Self {
+            prefix: Default::default(),
+            reverse: false,
+        }
+    }
+}

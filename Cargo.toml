@@ -2,8 +2,12 @@
 name = "bitkv-rs"
 version = "0.0.1"
 author = "kevin zhang"
-description = "A k/v store API inspired by bitcask"
+description = "A simple k/v store API inspired by bitcask"
 edition = "2021"
+
+[[example]]
+name = "basic_operations"
+path = "examples/basic_operations.rs"
 
 [dependencies]
 bytes = "1.5.0"
@@ -12,3 +16,4 @@ log = "0.4.21"
 parking_lot = "0.12.1"
 thiserror = "1.0.57"
 prost = "0.12.3"
+crc32fast = "1.4.0"
