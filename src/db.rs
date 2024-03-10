@@ -82,6 +82,18 @@ impl Engine {
         Ok(engine)
     }
 
+    /// close engine, release resources
+    pub fn close(&self) -> Result<()> {
+        let read_guard = self.active_data_file.read();
+        read_guard.sync()
+    }
+
+    /// sync current active data file to disk
+    pub fn sync(&self) -> Result<()> {
+        let read_guard = self.active_data_file.read();
+        read_guard.sync()
+    }
+
     /// store a key/value pair, ensuring key isn't null.
     pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
         // if the key is valid
