@@ -161,3 +161,37 @@ fn test_engine_delete() {
     // delete tested files
     std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
 }
+
+#[test]
+fn test_engine_sync() {
+    let mut opt = Options::default();
+    opt.dir_path = PathBuf::from("/tmp/bitkv-rs-sync");
+    opt.data_file_size = 64 * 1024 * 1024; // 64MB
+    let engine = Engine::open(opt.clone()).expect("fail to open engine");
+
+    let res = engine.put(get_test_key(11), get_test_value(11));
+    assert!(res.is_ok());
+
+    let sync_res = engine.sync();
+    assert!(sync_res.is_ok());
+
+    // delete tested files
+    std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
+}
+
+#[test]
+fn test_engine_close() {
+    let mut opt = Options::default();
+    opt.dir_path = PathBuf::from("/tmp/bitkv-rs-close");
+    opt.data_file_size = 64 * 1024 * 1024; // 64MB
+    let engine = Engine::open(opt.clone()).expect("fail to open engine");
+
+    let res = engine.put(get_test_key(11), get_test_value(11));
+    assert!(res.is_ok());
+
+    let close_res = engine.close();
+    assert!(close_res.is_ok());
+
+    // delete tested files
+    std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
+}
