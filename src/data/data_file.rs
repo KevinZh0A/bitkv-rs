@@ -177,7 +177,7 @@ mod tests {
         let enc1 = LogRecord {
             key: "key-a".as_bytes().to_vec(),
             value: "value-a".as_bytes().to_vec(),
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
         let buf1 = enc1.encode();
         let write_res1: std::prelude::v1::Result<usize, Errors> = data_file.write(&buf1);
@@ -195,12 +195,12 @@ mod tests {
         let enc2 = LogRecord {
             key: "key-b".as_bytes().to_vec(),
             value: "value-b".as_bytes().to_vec(),
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
         let enc3 = LogRecord {
             key: "key-c".as_bytes().to_vec(),
             value: "value-c".as_bytes().to_vec(),
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
 
         // Read from current write offset
@@ -229,7 +229,7 @@ mod tests {
         let enc4 = LogRecord {
             key: "key-d".as_bytes().to_vec(),
             value: "value-d".as_bytes().to_vec(),
-            rec_type: LogRecordType::DELETED,
+            rec_type: LogRecordType::Deleted,
         };
 
         let buf4 = enc4.encode();

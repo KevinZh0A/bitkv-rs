@@ -4,10 +4,13 @@ use prost::{encode_length_delimiter, length_delimiter_len};
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LogRecordType {
     // normal putting data
-    NORMAL = 1,
+    Normal = 1,
 
     // deleted data, tombstone value
-    DELETED = 2,
+    Deleted = 2,
+
+    // transaction finished
+    TxnFinished = 3,
 }
 // LogRecord write to data file record
 // for it is called log, data writes by appending to datafile, WAL format
@@ -30,6 +33,12 @@ pub struct LogRecordPos {
 pub struct ReadLogRecord {
     pub(crate) record: LogRecord,
     pub(crate) size: usize,
+}
+
+// temp record for transaction
+pub struct TransactionRecord {
+    pub(crate) record: LogRecord,
+    pub(crate) pos: LogRecordPos,
 }
 
 impl LogRecord {
@@ -89,8 +98,9 @@ impl LogRecord {
 impl LogRecordType {
     pub fn from_u8(value: u8) -> Self {
         match value {
-            1 => LogRecordType::NORMAL,
-            2 => LogRecordType::DELETED,
+            1 => LogRecordType::Normal,
+            2 => LogRecordType::Deleted,
+            3 => LogRecordType::TxnFinished,
             _ => panic!("unsupported log record type"),
         }
     }
@@ -108,30 +118,30 @@ mod tests {
     #[test]
     fn test_log_record_encode_and_get_crc() {
         // set a normal log record
-        let mut rec1 = LogRecord {
+        let rec1 = LogRecord {
             key: "key-a".as_bytes().to_vec(),
             value: "value-a".as_bytes().to_vec(),
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
         let enc1 = rec1.encode();
         assert!(enc1.len() > 5);
         assert_eq!(2460538915, rec1.get_crc());
 
         // set a log record which value is empty
-        let mut rec2 = LogRecord {
+        let rec2 = LogRecord {
             key: "bitkv-rs".as_bytes().to_vec(),
             value: vec![],
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
         let enc2 = rec2.encode();
         assert!(enc2.len() > 5);
         assert_eq!(3786119330, rec2.get_crc());
 
         // set a deleted log record
-        let mut rec3 = LogRecord {
+        let rec3 = LogRecord {
             key: "key-b".as_bytes().to_vec(),
             value: "value-b".as_bytes().to_vec(),
-            rec_type: LogRecordType::DELETED,
+            rec_type: LogRecordType::Deleted,
         };
         let enc3 = rec3.encode();
         assert!(enc3.len() > 5);
