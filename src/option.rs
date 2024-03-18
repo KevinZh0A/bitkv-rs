@@ -47,3 +47,20 @@ impl Default for IteratorOptions {
         }
     }
 }
+
+pub struct WriteBatchOptions {
+    // max batch number in one batch write
+    pub max_batch_num: usize,
+
+    // when commit if sync or not
+    pub sync_writes: bool,
+}
+
+impl Default for WriteBatchOptions {
+    fn default() -> Self {
+        Self {
+            max_batch_num: 1000,
+            sync_writes: true,
+        }
+    }
+}

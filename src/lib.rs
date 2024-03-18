@@ -7,6 +7,7 @@ mod util;
 
 pub mod db;
 pub mod option;
+pub mod batch;
 
 #[cfg(test)]
 mod dbtest;

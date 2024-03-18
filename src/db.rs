@@ -1,7 +1,8 @@
 use crate::{
+    batch::{log_record_key_with_seq, parse_log_record_key, NON_TXN_SEQ_NO},
     data::{
         data_file::{DataFile, DATA_FILE_NAME_SUFFIX},
-        log_record::{LogRecord, LogRecordPos, LogRecordType},
+        log_record::{LogRecord, LogRecordPos, LogRecordType, TransactionRecord},
     },
     errors::{Errors, Result},
     index,
@@ -9,8 +10,13 @@ use crate::{
 };
 use bytes::Bytes;
 use log::warn;
-use parking_lot::RwLock;
-use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+use parking_lot::{Mutex, RwLock};
+use std::{
+    collections::HashMap,
+    fs,
+    path::PathBuf,
+    sync::{atomic::AtomicUsize, Arc},
+};
 
 const INITIAL_FILE_ID: u32 = 0;
 
@@ -21,6 +27,8 @@ pub struct Engine {
     old_data_files: Arc<RwLock<HashMap<u32, DataFile>>>, // old data files
     pub(crate) index: Box<dyn index::Indexer>, // data cache index
     file_ids: Vec<u32>, // database setup file id list, only used for setup, not allowed to be modified or updated somewhere else
+    pub(crate) batch_commit_lock: Mutex<()>, // txn commit lock ensure serializable
+    pub(crate) seq_no: Arc<AtomicUsize>, // transaction sequence number
 }
 
 impl Engine {
@@ -74,10 +82,19 @@ impl Engine {
             old_data_files: Arc::new(RwLock::new(older_files)),
             index: Box::new(index::new_indexer(&options.index_type)),
             file_ids,
+            batch_commit_lock: Mutex::new(()),
+            seq_no: Arc::new(AtomicUsize::new(1)),
         };
 
         // load index from data files
-        engine.load_index_from_data_files()?;
+        let curr_seq_no = engine.load_index_from_data_files()?;
+
+        // update seq_no
+        if curr_seq_no > 0 {
+            engine
+                .seq_no
+                .store(curr_seq_no + 1, std::sync::atomic::Ordering::Relaxed);
+        }
 
         Ok(engine)
     }
@@ -103,9 +120,9 @@ impl Engine {
 
         // construct LogRecord
         let mut record = LogRecord {
-            key: key.to_vec(),
+            key: log_record_key_with_seq(key.to_vec(), NON_TXN_SEQ_NO),
             value: value.to_vec(),
-            rec_type: LogRecordType::NORMAL,
+            rec_type: LogRecordType::Normal,
         };
 
         // appending write to active file
@@ -134,9 +151,9 @@ impl Engine {
 
         // construct LogRecord
         let mut record = LogRecord {
-            key: key.to_vec(),
+            key: log_record_key_with_seq(key.to_vec(), NON_TXN_SEQ_NO),
             value: Default::default(),
-            rec_type: LogRecordType::DELETED,
+            rec_type: LogRecordType::Deleted,
         };
 
         // appending write to active file
@@ -190,7 +207,7 @@ impl Engine {
         };
 
         // Determines the type of the log record.
-        if let LogRecordType::DELETED = log_record.rec_type {
+        if let LogRecordType::Deleted = log_record.rec_type {
             return Err(Errors::KeyNotFound);
         };
 
@@ -199,7 +216,7 @@ impl Engine {
     }
 
     /// append write data to current active data file
-    fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecordPos> {
+    pub(crate) fn append_log_record(&self, log_record: &mut LogRecord) -> Result<LogRecordPos> {
         let dir_path = &self.options.dir_path;
 
         // encode input data
@@ -233,8 +250,7 @@ impl Engine {
             active_file.sync()?;
         }
 
-        // construct log record
-
+        // construct log record return info
         Ok(LogRecordPos {
             file_id: active_file.get_file_id(),
             offset: write_off,
@@ -243,11 +259,16 @@ impl Engine {
 
     /// load memory index from data files
     /// tranverse all data files, and process each log record
-    fn load_index_from_data_files(&self) -> Result<()> {
+    fn load_index_from_data_files(&self) -> Result<usize> {
+        let mut current_seq_no = NON_TXN_SEQ_NO;
         // if data_files is empty then return
         if self.file_ids.is_empty() {
-            return Ok(());
+            return Ok(current_seq_no);
         }
+
+        // temporary store data related to txn
+        let mut transaction_records = HashMap::new();
+
         let active_file = self.active_data_file.read();
         let old_files = self.old_data_files.read();
 
@@ -264,7 +285,7 @@ impl Engine {
                     }
                 };
 
-                let (log_record, size) = match log_record_res {
+                let (mut log_record, size) = match log_record_res {
                     Ok(result) => (result.record, result.size),
                     Err(e) => {
                         if e == Errors::ReadDataFileEOF {
@@ -275,20 +296,44 @@ impl Engine {
                 };
 
                 // construct mem index
-                let lof_record_pos = LogRecordPos {
+                let log_record_pos = LogRecordPos {
                     file_id: *file_id,
                     offset,
                 };
 
-                let ok = match log_record.rec_type {
-                    LogRecordType::NORMAL => {
-                        self.index.put(log_record.key.to_vec(), lof_record_pos)
+                // parse key, obtain actual key and seq_no
+                let (real_key, seq_no) = parse_log_record_key(log_record.key.clone());
+                // non txn log record, update index as usual
+                if seq_no == NON_TXN_SEQ_NO {
+                    self.update_index(real_key, log_record.rec_type, log_record_pos)?;
+                } else {
+                    // txn log record commit, update index
+                    if log_record.rec_type == LogRecordType::TxnFinished {
+                        let records: &Vec<TransactionRecord> =
+                            transaction_records.get(&seq_no).unwrap();
+                        for txn_record in records.iter() {
+                            self.update_index(
+                                txn_record.record.key.clone(),
+                                txn_record.record.rec_type,
+                                txn_record.pos,
+                            )?;
+                        }
+                        transaction_records.remove(&seq_no);
+                    } else {
+                        log_record.key = real_key;
+                        transaction_records
+                            .entry(seq_no)
+                            .or_insert_with(|| Vec::new())
+                            .push(TransactionRecord {
+                                record: log_record,
+                                pos: log_record_pos,
+                            });
                     }
-                    LogRecordType::DELETED => self.index.delete(log_record.key),
-                };
+                }
 
-                if !ok {
-                    return Err(Errors::IndexUpdateFailed);
+                // seq_no update
+                if seq_no > current_seq_no {
+                    current_seq_no = seq_no;
                 }
 
                 // offset move, read next log record
@@ -299,6 +344,17 @@ impl Engine {
             if i == self.file_ids.len() - 1 {
                 active_file.set_write_off(offset);
             }
+        }
+        Ok(current_seq_no)
+    }
+
+    fn update_index(&self, key: Vec<u8>, rec_type: LogRecordType, pos: LogRecordPos) -> Result<()> {
+        if rec_type == LogRecordType::Normal {
+            self.index.put(key.clone(), pos);
+        }
+
+        if rec_type == LogRecordType::Deleted {
+            self.index.delete(key);
         }
         Ok(())
     }
