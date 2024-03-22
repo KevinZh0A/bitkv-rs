@@ -3,12 +3,14 @@ use parking_lot::RwLock;
 use prost::{decode_length_delimiter, length_delimiter_len};
 use std::{path::PathBuf, sync::Arc};
 
-use super::log_record::{LogRecord, LogRecordType, ReadLogRecord};
+use super::log_record::{LogRecord, LogRecordPos, LogRecordType, ReadLogRecord};
 use crate::data::log_record::max_log_record_header_size;
 use crate::errors::{Errors, Result};
 use crate::fio::{new_io_manager, IOManager};
 
 pub const DATA_FILE_NAME_SUFFIX: &str = ".data";
+pub const HINT_FILE_NAME: &str = "hint-index";
+pub const MERGE_FINISHED_FILE_NAME: &str = "merge-finished";
 
 pub struct DataFile {
     file_id: Arc<RwLock<u32>>,      // data file id
@@ -17,6 +19,7 @@ pub struct DataFile {
 }
 
 impl DataFile {
+    /// create or open a new data file
     pub fn new(dir_path: &PathBuf, file_id: u32) -> Result<DataFile> {
         // get filename by file_id and dir_path
         let file_name = get_data_file_name(dir_path, file_id);
@@ -26,6 +29,33 @@ impl DataFile {
 
         Ok(DataFile {
             file_id: Arc::new(RwLock::new(file_id)),
+            write_off: Arc::new(RwLock::new(0)),
+            io_manager: Box::new(io_manager),
+        })
+    }
+
+    /// create a new hint file
+    pub fn new_hint_file(dir_path: &PathBuf) -> Result<DataFile> {
+        let file_name = dir_path.join(HINT_FILE_NAME);
+
+        // initialize IO manager
+        let io_manager = new_io_manager(&file_name)?;
+
+        Ok(DataFile {
+            file_id: Arc::new(RwLock::new(0)),
+            write_off: Arc::new(RwLock::new(0)),
+            io_manager: Box::new(io_manager),
+        })
+    }
+
+    pub fn new_merge_fin_file(dir_path: &PathBuf) -> Result<DataFile> {
+        let file_name = dir_path.join(MERGE_FINISHED_FILE_NAME);
+
+        // initialize IO manager
+        let io_manager = new_io_manager(&file_name)?;
+
+        Ok(DataFile {
+            file_id: Arc::new(RwLock::new(0)),
             write_off: Arc::new(RwLock::new(0)),
             io_manager: Box::new(io_manager),
         })
@@ -103,13 +133,25 @@ impl DataFile {
         Ok(n_bytes)
     }
 
+    // write hint record into hint file
+    pub fn write_hint_record(&self, key: Vec<u8>, pos: LogRecordPos) -> Result<()> {
+        let hint_record = LogRecord {
+            key,
+            value: pos.encode(),
+            rec_type: LogRecordType::Normal,
+        };
+        let enc_record = hint_record.encode();
+        self.write(&enc_record)?;
+        Ok(())
+    }
+
     pub fn sync(&self) -> Result<()> {
         self.io_manager.sync()
     }
 }
 
 /// get filename
-fn get_data_file_name(dir_path: &PathBuf, file_id: u32) -> PathBuf {
+pub fn get_data_file_name(dir_path: &PathBuf, file_id: u32) -> PathBuf {
     let name = format!("{:09}", file_id) + DATA_FILE_NAME_SUFFIX;
     dir_path.join(name)
 }
