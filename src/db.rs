@@ -1,11 +1,12 @@
 use crate::{
     batch::{log_record_key_with_seq, parse_log_record_key, NON_TXN_SEQ_NO},
     data::{
-        data_file::{DataFile, DATA_FILE_NAME_SUFFIX},
+        data_file::{DataFile, DATA_FILE_NAME_SUFFIX, MERGE_FINISHED_FILE_NAME},
         log_record::{LogRecord, LogRecordPos, LogRecordType, TransactionRecord},
     },
     errors::{Errors, Result},
     index,
+    merge::load_merge_files,
     option::Options,
 };
 use bytes::Bytes;
@@ -22,13 +23,14 @@ const INITIAL_FILE_ID: u32 = 0;
 
 // Storage Engine
 pub struct Engine {
-    options: Arc<Options>,
-    active_data_file: Arc<RwLock<DataFile>>, // current active data file
-    old_data_files: Arc<RwLock<HashMap<u32, DataFile>>>, // old data files
-    pub(crate) index: Box<dyn index::Indexer>, // data cache index
+    pub(crate) options: Arc<Options>,
+    pub(crate) active_data_file: Arc<RwLock<DataFile>>, // current active data file
+    pub(crate) old_data_files: Arc<RwLock<HashMap<u32, DataFile>>>, // old data files
+    pub(crate) index: Box<dyn index::Indexer>,          // data cache index
     file_ids: Vec<u32>, // database setup file id list, only used for setup, not allowed to be modified or updated somewhere else
     pub(crate) batch_commit_lock: Mutex<()>, // txn commit lock ensure serializable
     pub(crate) seq_no: Arc<AtomicUsize>, // transaction sequence number
+    pub(crate) merging_lock: Mutex<()>, // prevent multiple threads from merging data files at the same time
 }
 
 impl Engine {
@@ -48,6 +50,9 @@ impl Engine {
                 return Err(Errors::FailedToCreateDatabaseDir);
             };
         }
+
+        // load merge directory
+        load_merge_files(&dir_path)?;
 
         // load data file
         let mut data_files = load_data_files(&dir_path)?;
@@ -84,7 +89,11 @@ impl Engine {
             file_ids,
             batch_commit_lock: Mutex::new(()),
             seq_no: Arc::new(AtomicUsize::new(1)),
+            merging_lock: Mutex::new(()),
         };
+
+        // load index from hint file
+        engine.load_index_from_hint_file()?;
 
         // load index from data files
         let curr_seq_no = engine.load_index_from_data_files()?;
@@ -266,6 +275,19 @@ impl Engine {
             return Ok(current_seq_no);
         }
 
+        // get lastest unmerged file id
+        let mut has_merged = false;
+        let mut non_merge_fid = 0;
+        let merge_fin_file = self.options.dir_path.join(MERGE_FINISHED_FILE_NAME);
+        if merge_fin_file.is_file() {
+            let merge_file = DataFile::new_merge_fin_file(&self.options.dir_path)?;
+            let merge_fin_record = merge_file.read_log_record(0)?;
+            let v = String::from_utf8(merge_fin_record.record.value).unwrap();
+
+            non_merge_fid = v.parse::<u32>().unwrap();
+            has_merged = true;
+        }
+
         // temporary store data related to txn
         let mut transaction_records = HashMap::new();
 
@@ -274,6 +296,11 @@ impl Engine {
 
         // tranverse each file_id, retrieve data file and load its data
         for (i, file_id) in self.file_ids.iter().enumerate() {
+            // if file_id is less than non_merge_fid, then skip
+            if has_merged && *file_id < non_merge_fid {
+                continue;
+            }
+
             let mut offset = 0;
             loop {
                 // read data in loop

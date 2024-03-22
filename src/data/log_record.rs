@@ -1,5 +1,7 @@
 use bytes::{BufMut, BytesMut};
-use prost::{encode_length_delimiter, length_delimiter_len};
+use prost::{
+    encode_length_delimiter, encoding::decode_varint, encoding::encode_varint, length_delimiter_len,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum LogRecordType {
@@ -95,6 +97,15 @@ impl LogRecord {
     }
 }
 
+impl LogRecordPos {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = BytesMut::new();
+        encode_varint(self.file_id as u64, &mut buf);
+        encode_varint(self.offset, &mut buf);
+        buf.to_vec()
+    }
+}
+
 impl LogRecordType {
     pub fn from_u8(value: u8) -> Self {
         match value {
@@ -109,6 +120,25 @@ impl LogRecordType {
 // get max log record header length
 pub fn max_log_record_header_size() -> usize {
     std::mem::size_of::<u8>() + length_delimiter_len(std::u32::MAX as usize) * 2
+}
+
+// decode LogRecordPos
+pub fn decode_log_record_pos(pos: Vec<u8>) -> LogRecordPos {
+    let mut buf = BytesMut::new();
+    buf.put_slice(&pos);
+
+    let fid = match decode_varint(&mut buf) {
+        Ok(fid) => fid,
+        Err(e) => panic!("decode log record pos error: {}", e),
+    };
+    let offset = match decode_varint(&mut buf) {
+        Ok(offset) => offset,
+        Err(e) => panic!("decode log record pos error: {}", e),
+    };
+    LogRecordPos {
+        file_id: fid as u32,
+        offset,
+    }
 }
 
 #[cfg(test)]

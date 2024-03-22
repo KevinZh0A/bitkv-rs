@@ -5,9 +5,9 @@ mod index;
 mod iterator;
 mod util;
 
-pub mod db;
-pub mod option;
 pub mod batch;
-
+pub mod db;
 #[cfg(test)]
 mod dbtest;
+pub mod merge;
+pub mod option;
