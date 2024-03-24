@@ -85,7 +85,7 @@ impl Engine {
             options: options.clone(),
             active_data_file: Arc::new(RwLock::new(active_file)),
             old_data_files: Arc::new(RwLock::new(older_files)),
-            index: Box::new(index::new_indexer(&options.index_type)),
+            index: index::new_indexer(&options.index_type),
             file_ids,
             batch_commit_lock: Mutex::new(()),
             seq_no: Arc::new(AtomicUsize::new(1)),

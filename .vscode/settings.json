@@ -3,6 +3,8 @@
         "./Cargo.toml"
     ],
     "cSpell.words": [
-        "bitkv"
+        "bitkv",
+        "BPTREE",
+        "skiplist"
     ]
 }
