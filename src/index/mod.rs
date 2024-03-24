@@ -1,5 +1,5 @@
 pub mod btree;
-
+pub mod skiplist;
 use bytes::Bytes;
 
 use crate::option::IteratorOptions;
