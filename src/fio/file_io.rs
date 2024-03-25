@@ -15,7 +15,7 @@ pub struct FileIO {
 }
 
 impl FileIO {
-    fn new(file_name: PathBuf) -> Result<Self> {
+    pub fn new(file_name: &PathBuf) -> Result<Self> {
         match OpenOptions::new()
             .create(true)
             .read(true)
@@ -67,6 +67,11 @@ impl IOManager for FileIO {
         }
         Ok(())
     }
+
+    fn size(&self) -> u64 {
+        let read_guard = self.fd.read();
+        read_guard.metadata().unwrap().len()
+    }
 }
 
 #[cfg(test)]
@@ -78,7 +83,7 @@ mod tests {
     #[test]
     fn test_file_io_write() {
         let path = PathBuf::from("/tmp/a.data");
-        let fio_res = FileIO::new(path.clone());
+        let fio_res = FileIO::new(&path);
         assert!(fio_res.is_ok());
 
         let fio = fio_res.ok().unwrap();
@@ -90,14 +95,14 @@ mod tests {
         assert!(res2.is_ok());
         assert_eq!(5, res2.ok().unwrap());
 
-        let res3 = fs::remove_file(path.clone());
+        let res3 = fs::remove_file(path);
         assert!(res3.is_ok());
     }
 
     #[test]
     fn test_file_io_read() {
         let path = PathBuf::from("/tmp/b.data");
-        let fio_res = FileIO::new(path.clone());
+        let fio_res = FileIO::new(&path);
         assert!(fio_res.is_ok());
 
         let fio = fio_res.ok().unwrap();
@@ -126,7 +131,7 @@ mod tests {
     #[test]
     fn test_file_io_sync() {
         let path = PathBuf::from("/tmp/c.data");
-        let fio_res = FileIO::new(path.clone());
+        let fio_res = FileIO::new(&path);
         assert!(fio_res.is_ok());
 
         let fio = fio_res.ok().unwrap();
@@ -141,7 +146,7 @@ mod tests {
         let sync_res = fio.sync();
         assert!(sync_res.is_ok());
 
-        let res3 = fs::remove_file(path.clone());
+        let res3 = fs::remove_file(path);
         assert!(res3.is_ok());
     }
 }

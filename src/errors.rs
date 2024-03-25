@@ -45,6 +45,18 @@ pub enum Errors {
 
     #[error("read data file eof")]
     ReadDataFileEOF,
+
+    #[error("invalid crc value, log record maybe corrupted")]
+    InvalidLogRecordCrc,
+
+    #[error("exceed max batch number in one batch write")]
+    ExceedMaxBatchNum,
+
+    #[error("merge is in progress, try again later")]
+    MergeInProgress,
+
+    #[error("cannot use write batch, seq_no does not exist")]
+    UnableToUseWriteBatch,
 }
 
 pub type Result<T> = result::Result<T, Errors>;
