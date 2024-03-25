@@ -1,6 +1,7 @@
 use bytes::{Buf, BytesMut};
 use parking_lot::RwLock;
 use prost::{decode_length_delimiter, length_delimiter_len};
+use std::path::Path;
 use std::{path::PathBuf, sync::Arc};
 
 use super::log_record::{LogRecord, LogRecordPos, LogRecordType, ReadLogRecord};
@@ -21,9 +22,12 @@ pub struct DataFile {
 
 impl DataFile {
     /// create or open a new data file
-    pub fn new(dir_path: &PathBuf, file_id: u32) -> Result<DataFile> {
+    pub fn new<P>(dir_path: P, file_id: u32) -> Result<DataFile>
+    where
+        P: AsRef<Path>,
+    {
         // get filename by file_id and dir_path
-        let file_name = get_data_file_name(dir_path, file_id);
+        let file_name = get_data_file_name(&dir_path, file_id);
 
         // initialize IO manager
         let io_manager = new_io_manager(&file_name)?;
@@ -36,8 +40,11 @@ impl DataFile {
     }
 
     /// create a new hint file
-    pub fn new_hint_file(dir_path: &PathBuf) -> Result<DataFile> {
-        let file_name = dir_path.join(HINT_FILE_NAME);
+    pub fn new_hint_file<P>(dir_path: P) -> Result<DataFile>
+    where
+        P: AsRef<Path>,
+    {
+        let file_name = dir_path.as_ref().join(HINT_FILE_NAME);
 
         // initialize IO manager
         let io_manager = new_io_manager(&file_name)?;
@@ -49,8 +56,11 @@ impl DataFile {
         })
     }
     // create or open a new merge finished file
-    pub fn new_merge_fin_file(dir_path: &PathBuf) -> Result<DataFile> {
-        let file_name = dir_path.join(MERGE_FINISHED_FILE_NAME);
+    pub fn new_merge_fin_file<P>(dir_path: P) -> Result<DataFile>
+    where
+        P: AsRef<Path>,
+    {
+        let file_name = dir_path.as_ref().join(MERGE_FINISHED_FILE_NAME);
 
         // initialize IO manager
         let io_manager = new_io_manager(&file_name)?;
@@ -63,8 +73,11 @@ impl DataFile {
     }
 
     // create or open a new merge finished file
-    pub fn new_seq_no_file(dir_path: &PathBuf) -> Result<DataFile> {
-        let file_name = dir_path.join(SEQ_NO_FILE_NAME);
+    pub fn new_seq_no_file<P>(dir_path: P) -> Result<DataFile>
+    where
+        P: AsRef<Path>,
+    {
+        let file_name = dir_path.as_ref().join(SEQ_NO_FILE_NAME);
 
         // initialize IO manager
         let io_manager = new_io_manager(&file_name)?;
@@ -170,9 +183,12 @@ impl DataFile {
 }
 
 /// get filename
-pub fn get_data_file_name(dir_path: &PathBuf, file_id: u32) -> PathBuf {
+pub fn get_data_file_name<P>(dir_path: P, file_id: u32) -> PathBuf
+where
+    P: AsRef<Path>,
+{
     let name = format!("{:09}", file_id) + DATA_FILE_NAME_SUFFIX;
-    dir_path.join(name)
+    dir_path.as_ref().join(name)
 }
 
 #[cfg(test)]
