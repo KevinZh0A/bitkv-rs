@@ -98,7 +98,7 @@ fn test_engine_get() {
     assert_eq!(Errors::KeyNotFound, res9.err().unwrap());
 
     // read from old data file
-    for i in 500..=100000 { 
+    for i in 500..=100000 {
         let res = engine.put(get_test_key(i), get_test_value(i));
         assert!(res.is_ok());
     }

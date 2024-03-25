@@ -2,7 +2,7 @@ pub mod bptree;
 pub mod btree;
 pub mod skiplist;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bytes::Bytes;
 
