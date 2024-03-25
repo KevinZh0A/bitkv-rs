@@ -67,6 +67,11 @@ impl IOManager for FileIO {
         }
         Ok(())
     }
+
+    fn size(&self) -> u64 {
+        let read_guard = self.fd.read();
+        read_guard.metadata().unwrap().len()
+    }
 }
 
 #[cfg(test)]

@@ -16,6 +16,9 @@ pub trait IOManager: Sync + Send {
 
     /// data persistence
     fn sync(&self) -> Result<()>;
+
+    /// get file size
+    fn size(&self) -> u64;
 }
 
 /// Initialize IO manager by filename
