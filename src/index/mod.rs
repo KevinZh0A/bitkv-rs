@@ -2,6 +2,8 @@ pub mod bptree;
 pub mod btree;
 pub mod skiplist;
 
+use std::path::PathBuf;
+
 use bytes::Bytes;
 
 use crate::option::IteratorOptions;
@@ -25,10 +27,11 @@ pub trait Indexer: Sync + Send {
     fn iterator(&self, options: IteratorOptions) -> Box<dyn IndexIterator>;
 }
 
-pub fn new_indexer(index_type: &IndexType) -> Box<dyn Indexer> {
+pub fn new_indexer(index_type: &IndexType, dir_path: &PathBuf) -> Box<dyn Indexer> {
     match *index_type {
         IndexType::BTree => Box::new(btree::BTree::new()),
         IndexType::SkipList => Box::new(skiplist::SkipList::new()),
+        IndexType::BPlusTree => Box::new(bptree::BPlusTree::new(&dir_path)),
     }
 }
 

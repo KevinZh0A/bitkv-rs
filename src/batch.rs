@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    panic,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -11,7 +12,7 @@ use crate::{
     data::log_record::{LogRecord, LogRecordType},
     db::Engine,
     errors::{Errors, Result},
-    option::WriteBatchOptions,
+    option::{IndexType, WriteBatchOptions},
 };
 
 const TXN_FIN_KEY: &[u8] = "txn-fin".as_bytes();
@@ -27,6 +28,13 @@ pub struct WriteBatch<'a> {
 impl Engine {
     /// Create a new write batch.
     pub fn new_write_batch(&self, options: WriteBatchOptions) -> Result<WriteBatch> {
+        if self.options.index_type == IndexType::BPlusTree
+            && !self.seq_file_exists
+            && !self.is_initial
+        {
+            return Err(Errors::UnableToUseWriteBatch);
+        }
+
         Ok(WriteBatch {
             pending_writes: Arc::new(Mutex::new(HashMap::new())),
             engine: self,

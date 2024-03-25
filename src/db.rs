@@ -1,25 +1,34 @@
 use crate::{
     batch::{log_record_key_with_seq, parse_log_record_key, NON_TXN_SEQ_NO},
     data::{
-        data_file::{DataFile, DATA_FILE_NAME_SUFFIX, MERGE_FINISHED_FILE_NAME},
+        data_file::{DataFile, DATA_FILE_NAME_SUFFIX, MERGE_FINISHED_FILE_NAME, SEQ_NO_FILE_NAME},
         log_record::{LogRecord, LogRecordPos, LogRecordType, TransactionRecord},
     },
     errors::{Errors, Result},
     index,
     merge::load_merge_files,
-    option::Options,
+    option::{IndexType, Options},
 };
 use bytes::Bytes;
-use log::warn;
+use log::{error, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
     collections::HashMap,
     fs,
     path::PathBuf,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 const INITIAL_FILE_ID: u32 = 0;
+const SEQ_NO_KEY: &str = "seq.no";
+
+pub enum SeqNoExist {
+    Yes(usize),
+    None,
+}
 
 // Storage Engine
 pub struct Engine {
@@ -31,6 +40,8 @@ pub struct Engine {
     pub(crate) batch_commit_lock: Mutex<()>, // txn commit lock ensure serializable
     pub(crate) seq_no: Arc<AtomicUsize>, // transaction sequence number
     pub(crate) merging_lock: Mutex<()>, // prevent multiple threads from merging data files at the same time
+    pub(crate) seq_file_exists: bool,   // whether the seq_no file exists
+    pub(crate) is_initial: bool,        // whether the engine is initialized
 }
 
 impl Engine {
@@ -40,17 +51,21 @@ impl Engine {
         if let Some(e) = check_options(&opts) {
             return Err(e);
         };
-
+        let mut is_initial = false;
         let options = Arc::new(opts);
         // determine if dir is valid, dir does not exist, create a new one
         let dir_path = &options.dir_path;
         if !dir_path.is_dir() {
+            is_initial = true;
             if let Err(e) = fs::create_dir(dir_path.as_path()) {
                 warn!("failed to create database directory error: {}", e);
                 return Err(Errors::FailedToCreateDatabaseDir);
             };
         }
-
+        let entry = fs::read_dir(&dir_path).unwrap();
+        if entry.count() == 0 {
+            is_initial = true;
+        }
         // load merge directory
         load_merge_files(&dir_path)?;
 
@@ -81,28 +96,46 @@ impl Engine {
         };
 
         // create a new engine instance
-        let engine = Self {
+        let mut engine = Self {
             options: options.clone(),
             active_data_file: Arc::new(RwLock::new(active_file)),
             old_data_files: Arc::new(RwLock::new(older_files)),
-            index: index::new_indexer(&options.index_type),
+            index: index::new_indexer(&options.index_type, &options.dir_path),
             file_ids,
             batch_commit_lock: Mutex::new(()),
             seq_no: Arc::new(AtomicUsize::new(1)),
             merging_lock: Mutex::new(()),
+            seq_file_exists: false,
+            is_initial,
         };
 
-        // load index from hint file
-        engine.load_index_from_hint_file()?;
+        // B+Tree index type, load index from hint file and data files
+        match engine.options.index_type {
+            IndexType::BPlusTree => {
+                // load seq_no from current transaction
+                let (is_exists, seq_no) = engine.load_seq_no();
 
-        // load index from data files
-        let curr_seq_no = engine.load_index_from_data_files()?;
+                engine.seq_no.store(seq_no, Ordering::SeqCst);
+                engine.seq_file_exists = is_exists;
 
-        // update seq_no
-        if curr_seq_no > 0 {
-            engine
-                .seq_no
-                .store(curr_seq_no + 1, std::sync::atomic::Ordering::Relaxed);
+                // update offset of active data file
+                let active_file = engine.active_data_file.write();
+                active_file.set_write_off(active_file.file_size());
+            }
+            _ => {
+                // load index from hint file
+                engine.load_index_from_hint_file()?;
+
+                // load index from data files
+                let curr_seq_no = engine.load_index_from_data_files()?;
+
+                // update seq_no
+                if curr_seq_no > 0 {
+                    engine
+                        .seq_no
+                        .store(curr_seq_no + 1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
         }
 
         Ok(engine)
@@ -110,6 +143,17 @@ impl Engine {
 
     /// close engine, release resources
     pub fn close(&self) -> Result<()> {
+        // load seq_no from current transaction
+        let seq_no_file = DataFile::new_seq_no_file(&self.options.dir_path)?;
+        let seq_no = self.seq_no.load(Ordering::SeqCst);
+        let record = LogRecord {
+            key: SEQ_NO_KEY.as_bytes().to_vec(),
+            value: seq_no.to_string().into(),
+            rec_type: LogRecordType::Normal,
+        };
+        seq_no_file.write(&record.encode())?;
+        seq_no_file.sync()?;
+
         let read_guard = self.active_data_file.read();
         read_guard.sync()
     }
@@ -375,6 +419,26 @@ impl Engine {
         Ok(current_seq_no)
     }
 
+    /// load seq_no under B+Tree index type
+    fn load_seq_no(&self) -> (bool, usize) {
+        let file_name = self.options.dir_path.join(SEQ_NO_FILE_NAME);
+        if !file_name.is_file() {
+            return (false, 0);
+        }
+        let seq_no_file = DataFile::new_seq_no_file(&self.options.dir_path).unwrap();
+        let record = match seq_no_file.read_log_record(0) {
+            Ok(res) => res.record,
+            Err(e) => panic!("failed to read seq_no: {}", e),
+        };
+        let v = String::from_utf8(record.value).unwrap();
+        let seq_no = v.parse::<usize>().unwrap();
+
+        // remove seq_no file, avoiding repeated writing
+        fs::remove_file(file_name).unwrap();
+
+        (true, seq_no)
+    }
+
     fn update_index(&self, key: Vec<u8>, rec_type: LogRecordType, pos: LogRecordPos) -> Result<()> {
         if rec_type == LogRecordType::Normal {
             self.index.put(key.clone(), pos);
@@ -384,6 +448,14 @@ impl Engine {
             self.index.delete(key);
         }
         Ok(())
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        if let Err(e) = self.close() {
+            error!("error while closing engine {}", e);
+        }
     }
 }
 

@@ -54,6 +54,9 @@ pub enum Errors {
 
     #[error("merge is in progress, try again later")]
     MergeInProgress,
+
+    #[error("cannot use write batch, seq_no does not exist")]
+    UnableToUseWriteBatch,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

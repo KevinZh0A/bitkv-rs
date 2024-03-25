@@ -11,6 +11,7 @@ use crate::fio::{new_io_manager, IOManager};
 pub const DATA_FILE_NAME_SUFFIX: &str = ".data";
 pub const HINT_FILE_NAME: &str = "hint-index";
 pub const MERGE_FINISHED_FILE_NAME: &str = "merge-finished";
+pub const SEQ_NO_FILE_NAME: &str = "seq-no";
 
 pub struct DataFile {
     file_id: Arc<RwLock<u32>>,      // data file id
@@ -47,7 +48,7 @@ impl DataFile {
             io_manager: Box::new(io_manager),
         })
     }
-
+    // create or open a new merge finished file
     pub fn new_merge_fin_file(dir_path: &PathBuf) -> Result<DataFile> {
         let file_name = dir_path.join(MERGE_FINISHED_FILE_NAME);
 
@@ -59,6 +60,24 @@ impl DataFile {
             write_off: Arc::new(RwLock::new(0)),
             io_manager: Box::new(io_manager),
         })
+    }
+
+    // create or open a new merge finished file
+    pub fn new_seq_no_file(dir_path: &PathBuf) -> Result<DataFile> {
+        let file_name = dir_path.join(SEQ_NO_FILE_NAME);
+
+        // initialize IO manager
+        let io_manager = new_io_manager(&file_name)?;
+
+        Ok(DataFile {
+            file_id: Arc::new(RwLock::new(0)),
+            write_off: Arc::new(RwLock::new(0)),
+            io_manager: Box::new(io_manager),
+        })
+    }
+
+    pub fn file_size(&self) -> u64 {
+        self.io_manager.size()
     }
 
     pub fn get_write_off(&self) -> u64 {
