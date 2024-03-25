@@ -233,6 +233,8 @@ mod tests {
 
         // verify sequence number after restart
         engine.close().expect("fail to close");
+        std::mem::drop(engine);
+        
         let engine2 = Engine::open(opt.clone()).expect("fail to open engine");
         let keys = engine2.list_keys();
         assert_eq!(3, keys.unwrap().len());

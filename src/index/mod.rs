@@ -2,7 +2,7 @@ pub mod bptree;
 pub mod btree;
 pub mod skiplist;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
 
@@ -31,7 +31,10 @@ pub fn new_indexer(index_type: &IndexType, dir_path: &PathBuf) -> Box<dyn Indexe
     match *index_type {
         IndexType::BTree => Box::new(btree::BTree::new()),
         IndexType::SkipList => Box::new(skiplist::SkipList::new()),
-        IndexType::BPlusTree => Box::new(bptree::BPlusTree::new(&dir_path)),
+        IndexType::BPlusTree => {
+            println!("BPlusTree index type is selected.dir_path = {:#?} ", &dir_path);
+            Box::new(bptree::BPlusTree::new(&dir_path))
+        },
     }
 }
 

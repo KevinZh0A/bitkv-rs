@@ -33,7 +33,7 @@ impl Default for Options {
             dir_path: std::env::temp_dir().join("bitkv-rs"),
             data_file_size: 256 * 1024 * 1024, // 256MB
             sync_writes: false,
-            index_type: IndexType::BTree,
+            index_type: IndexType::BPlusTree,
         }
     }
 }
