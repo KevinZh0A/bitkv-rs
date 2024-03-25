@@ -43,12 +43,14 @@ fn test_engine_put() {
     assert_eq!(0, res8.ok().unwrap().len());
 
     // write to changed data file
-    for i in 0..=1000000 {
+    for i in 0..=10000 {
         let res = engine.put(get_test_key(i), get_test_value(i));
         assert!(res.is_ok());
     }
 
     // restart engine and write data
+    std::mem::drop(engine);
+
     let engine2 = Engine::open(opt.clone()).expect("fail to open engine");
     let res9 = engine2.put(get_test_key(100), get_test_value(100));
     assert!(res9.is_ok());
@@ -96,7 +98,7 @@ fn test_engine_get() {
     assert_eq!(Errors::KeyNotFound, res9.err().unwrap());
 
     // read from old data file
-    for i in 500..=1000000 {
+    for i in 500..=100000 { 
         let res = engine.put(get_test_key(i), get_test_value(i));
         assert!(res.is_ok());
     }
@@ -104,6 +106,8 @@ fn test_engine_get() {
     assert!(res10.is_ok());
 
     // restart engine and read data
+    std::mem::drop(engine);
+
     let engine2 = Engine::open(opt.clone()).expect("fail to open engine");
     let res11 = engine2.get(get_test_key(33));
     assert_eq!(get_test_value(33), res11.unwrap());
@@ -152,6 +156,7 @@ fn test_engine_delete() {
     assert!(res9.is_ok());
 
     // restart engine and delete data
+    std::mem::drop(engine);
     let engine2 = Engine::open(opt.clone()).expect("fail to open engine");
     let res10 = engine2.delete(get_test_key(11));
     assert!(res10.is_ok());

@@ -1,4 +1,5 @@
 use std::{
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -27,6 +28,9 @@ impl BPlusTree {
     where
         P: AsRef<Path>,
     {
+        if !dir_path.as_ref().exists() {
+            fs::create_dir_all(&dir_path).unwrap();
+        }
         let bptree =
             DB::open(dir_path.as_ref().join(BPTREE_INDEX_FILE_NAME)).expect("fail to open b+ tree");
         let tree = Arc::new(bptree);

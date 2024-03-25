@@ -53,6 +53,7 @@ impl Engine {
         };
         let mut is_initial = false;
         let options = Arc::new(opts);
+
         // determine if dir is valid, dir does not exist, create a new one
         let dir_path = &options.dir_path;
         if !dir_path.is_dir() {
@@ -66,10 +67,10 @@ impl Engine {
         if entry.count() == 0 {
             is_initial = true;
         }
-        // load merge directory
+        // load merge files
         load_merge_files(&dir_path)?;
 
-        // load data file
+        // load data files
         let mut data_files = load_data_files(&dir_path)?;
 
         // set file id info
@@ -109,14 +110,16 @@ impl Engine {
             is_initial,
         };
 
-        // B+Tree index type, load index from hint file and data files
+        // if not B+Tree index type, load index from hint file and data files
+        println!("if not B+Tree index type, load index from hint file and data files");
         match engine.options.index_type {
             IndexType::BPlusTree => {
                 // load seq_no from current transaction
                 let (is_exists, seq_no) = engine.load_seq_no();
-
-                engine.seq_no.store(seq_no, Ordering::SeqCst);
-                engine.seq_file_exists = is_exists;
+                if is_exists {
+                    engine.seq_no.store(seq_no, Ordering::SeqCst);
+                    engine.seq_file_exists = is_exists;
+                }
 
                 // update offset of active data file
                 let active_file = engine.active_data_file.write();
