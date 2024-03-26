@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: '14'
+          node-version: '20.10.0'
 
       - name: Install semantic-release and plugins
         run: npm install semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/github
@@ -26,4 +26,3 @@ jobs:
         run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
