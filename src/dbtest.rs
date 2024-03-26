@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{f64::consts::E, path::PathBuf};
 
 use bytes::Bytes;
 
@@ -196,6 +196,25 @@ fn test_engine_close() {
 
   let close_res = engine.close();
   assert!(close_res.is_ok());
+
+  // delete tested files
+  std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
+}
+
+#[test]
+fn test_engine_filelock() {
+  let mut opt = Options::default();
+  opt.dir_path = PathBuf::from("/tmp/bitkv-rs-flock");
+  let engine = Engine::open(opt.clone()).expect("fail to open engine");
+
+  let res1 = Engine::open(opt.clone());
+  assert_eq!(Errors::DatabaseIsUsing, res1.err().unwrap());
+
+  let res2 = engine.close();
+  assert!(res2.is_ok());
+
+  let res3 = Engine::open(opt.clone());
+  assert!(res3.is_ok());
 
   // delete tested files
   std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");

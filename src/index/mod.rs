@@ -6,8 +6,11 @@ use std::path::PathBuf;
 
 use bytes::Bytes;
 
-use crate::option::IteratorOptions;
-use crate::{data::log_record::LogRecordPos, errors::Result, option::IndexType};
+use crate::{
+  data::log_record::LogRecordPos,
+  errors::Result,
+  option::{IndexType, IteratorOptions},
+};
 
 // Abstract interface specifies methods for interchangeable indexing data structures
 pub trait Indexer: Sync + Send {

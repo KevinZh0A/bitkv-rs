@@ -11,20 +11,22 @@ use crate::{
   option::{IndexType, Options},
 };
 use bytes::Bytes;
+use fs2::FileExt;
 use log::{error, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
   collections::HashMap,
-  fs,
+  fs::{self, File},
   path::Path,
   sync::{
-    atomic::{AtomicUsize, Ordering},
+  atomic::{AtomicUsize, Ordering},
     Arc,
   },
 };
 
 const INITIAL_FILE_ID: u32 = 0;
 const SEQ_NO_KEY: &str = "seq.no";
+pub(crate) const FILE_LOCK_NAME: &str = "flock";
 
 pub enum SeqNoExist {
   Yes(usize),
@@ -43,6 +45,7 @@ pub struct Engine {
   pub(crate) merging_lock: Mutex<()>, // prevent multiple threads from merging data files at the same time
   pub(crate) seq_file_exists: bool,   // whether the seq_no file exists
   pub(crate) is_initial: bool,        // whether the engine is initialized
+  lock_file: File, // file lock, ensure only one engine instance can open the database directory
 }
 
 impl Engine {
@@ -64,6 +67,18 @@ impl Engine {
         return Err(Errors::FailedToCreateDatabaseDir);
       };
     }
+
+    // determine if dir is empty, if empty, set is_initial to true
+    let lock_file = fs::OpenOptions::new()
+      .read(true)
+      .write(true)
+      .create(true)
+      .open(dir_path.join(FILE_LOCK_NAME))
+      .unwrap();
+    if let Err(_) = lock_file.try_lock_exclusive() {
+      return Err(Errors::DatabaseIsUsing);
+    }
+
     let entry = fs::read_dir(dir_path).unwrap();
     if entry.count() == 0 {
       is_initial = true;
@@ -109,10 +124,10 @@ impl Engine {
       merging_lock: Mutex::new(()),
       seq_file_exists: false,
       is_initial,
+      lock_file,
     };
 
     // if not B+Tree index type, load index from hint file and data files
-    println!("if not B+Tree index type, load index from hint file and data files");
     match engine.options.index_type {
       IndexType::BPlusTree => {
         // load seq_no from current transaction
@@ -147,6 +162,10 @@ impl Engine {
 
   /// close engine, release resources
   pub fn close(&self) -> Result<()> {
+    // if dir_path doesn't exist, return
+    if !self.options.dir_path.is_dir() {
+      return Ok(());
+    }
     // load seq_no from current transaction
     let seq_no_file = DataFile::new_seq_no_file(&self.options.dir_path)?;
     let seq_no = self.seq_no.load(Ordering::SeqCst);
@@ -159,7 +178,12 @@ impl Engine {
     seq_no_file.sync()?;
 
     let read_guard = self.active_data_file.read();
-    read_guard.sync()
+    read_guard.sync()?;
+
+    // release file lock
+    self.lock_file.unlock().unwrap();
+
+    Ok(())
   }
 
   /// sync current active data file to disk

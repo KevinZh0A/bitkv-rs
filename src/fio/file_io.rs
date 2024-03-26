@@ -3,11 +3,13 @@ use super::IOManager;
 use crate::errors::{Errors, Result};
 use log::error;
 use parking_lot::RwLock;
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::os::unix::fs::FileExt;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{
+  fs::{File, OpenOptions},
+  io::Write,
+  os::unix::fs::FileExt,
+  path::PathBuf,
+  sync::Arc,
+};
 
 /// FileIO standard system file I/O
 pub struct FileIO {

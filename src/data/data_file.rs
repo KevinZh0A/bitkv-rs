@@ -1,13 +1,17 @@
 use bytes::{Buf, BytesMut};
 use parking_lot::RwLock;
 use prost::{decode_length_delimiter, length_delimiter_len};
-use std::path::Path;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use super::log_record::{LogRecord, LogRecordPos, LogRecordType, ReadLogRecord};
-use crate::data::log_record::max_log_record_header_size;
-use crate::errors::{Errors, Result};
-use crate::fio::{new_io_manager, IOManager};
+use crate::{
+  data::log_record::max_log_record_header_size,
+  errors::{Errors, Result},
+  fio::{new_io_manager, IOManager},
+};
 
 pub const DATA_FILE_NAME_SUFFIX: &str = ".data";
 pub const HINT_FILE_NAME: &str = "hint-index";

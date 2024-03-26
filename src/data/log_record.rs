@@ -1,6 +1,8 @@
 use bytes::{BufMut, BytesMut};
 use prost::{
-  encode_length_delimiter, encoding::decode_varint, encoding::encode_varint, length_delimiter_len,
+  encode_length_delimiter,
+  encoding::{decode_varint, encode_varint},
+  length_delimiter_len,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

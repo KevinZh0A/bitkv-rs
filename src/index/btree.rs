@@ -1,8 +1,7 @@
 use crate::{data::log_record::LogRecordPos, errors::Result, option::IteratorOptions};
 use bytes::Bytes;
 use parking_lot::RwLock;
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use super::{IndexIterator, Indexer};
 

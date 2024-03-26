@@ -14,7 +14,7 @@ use crate::{
     },
     log_record::{decode_log_record_pos, LogRecord, LogRecordType},
   },
-  db::Engine,
+  db::{Engine, FILE_LOCK_NAME},
   errors::{Errors, Result},
   option::Options,
 };
@@ -217,6 +217,11 @@ where
     if file_name.ends_with(SEQ_NO_FILE_NAME) {
       continue;
     }
+
+    if file_name.ends_with(FILE_LOCK_NAME) {
+      continue;
+    }
+
     merge_file_names.push(file.file_name());
   }
 

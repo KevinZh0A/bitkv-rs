@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-use std::result;
+use std::{fmt::Debug, result};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -57,6 +56,9 @@ pub enum Errors {
 
   #[error("cannot use write batch, seq_no does not exist")]
   UnableToUseWriteBatch,
+
+  #[error("the database directory is used by another process")]
+  DatabaseIsUsing,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

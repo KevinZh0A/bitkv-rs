@@ -152,7 +152,6 @@ impl IndexIterator for BPTreeIterator {
 mod tests {
 
   use super::*;
-  use std::fs;
   use std::path::PathBuf;
 
   #[test]
