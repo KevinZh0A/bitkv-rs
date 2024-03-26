@@ -17,3 +17,10 @@ Cargo.lock
 # Added by cargo
 
 /target
+
+# VSCode - Visual Studio Code files
+.vscode/
+*.code-workspace
+
+# Local History for Visual Studio Code
+.history/
