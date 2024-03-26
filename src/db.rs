@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_closure)]
 use crate::{
     batch::{log_record_key_with_seq, parse_log_record_key, NON_TXN_SEQ_NO},
     data::{
@@ -15,7 +16,7 @@ use parking_lot::{Mutex, RwLock};
 use std::{
     collections::HashMap,
     fs,
-    path::PathBuf,
+    path::Path,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -63,15 +64,15 @@ impl Engine {
                 return Err(Errors::FailedToCreateDatabaseDir);
             };
         }
-        let entry = fs::read_dir(&dir_path).unwrap();
+        let entry = fs::read_dir(dir_path).unwrap();
         if entry.count() == 0 {
             is_initial = true;
         }
         // load merge files
-        load_merge_files(&dir_path)?;
+        load_merge_files(dir_path)?;
 
         // load data files
-        let mut data_files = load_data_files(&dir_path)?;
+        let mut data_files = load_data_files(dir_path)?;
 
         // set file id info
         let mut file_ids = Vec::new();
@@ -315,6 +316,7 @@ impl Engine {
 
     /// load memory index from data files
     /// tranverse all data files, and process each log record
+
     fn load_index_from_data_files(&self) -> Result<usize> {
         let mut current_seq_no = NON_TXN_SEQ_NO;
         // if data_files is empty then return
@@ -463,9 +465,12 @@ impl Drop for Engine {
 }
 
 // load data files from database directory
-fn load_data_files(dir_path: &PathBuf) -> Result<Vec<DataFile>> {
+fn load_data_files<P>(dir_path: P) -> Result<Vec<DataFile>>
+where
+    P: AsRef<Path>,
+{
     // read database directory
-    let dir = fs::read_dir(dir_path);
+    let dir = fs::read_dir(&dir_path);
     if dir.is_err() {
         return Err(Errors::FailedToReadDatabaseDir);
     }
@@ -473,24 +478,22 @@ fn load_data_files(dir_path: &PathBuf) -> Result<Vec<DataFile>> {
     let mut file_ids: Vec<u32> = Vec::new();
     let mut data_files: Vec<DataFile> = Vec::new();
 
-    for file in dir.unwrap() {
-        if let Ok(entry) = file {
-            // Retrieve file name
-            let file_os_str = entry.file_name();
-            let file_name = file_os_str.to_str().unwrap();
+    for file in dir.unwrap().flatten() {
+        // Retrieve file name
+        let file_os_str = file.file_name();
+        let file_name = file_os_str.to_str().unwrap();
 
-            // determine if file name ends up with .data
-            if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {
-                let splited_names: Vec<&str> = file_name.split(".").collect();
-                let file_id = match splited_names[0].parse::<u32>() {
-                    Ok(fid) => fid,
-                    Err(_) => {
-                        return Err(Errors::DatabaseDirectoryCorrupted);
-                    }
-                };
+        // determine if file name ends up with .data
+        if file_name.ends_with(DATA_FILE_NAME_SUFFIX) {
+            let splited_names: Vec<&str> = file_name.split('.').collect();
+            let file_id = match splited_names[0].parse::<u32>() {
+                Ok(fid) => fid,
+                Err(_) => {
+                    return Err(Errors::DatabaseDirectoryCorrupted);
+                }
+            };
 
-                file_ids.push(file_id);
-            }
+            file_ids.push(file_id);
         }
     }
 
@@ -504,7 +507,7 @@ fn load_data_files(dir_path: &PathBuf) -> Result<Vec<DataFile>> {
 
     // traverse file_ids, sequentially loading data files
     for file_id in file_ids.iter() {
-        let data_file = DataFile::new(dir_path, *file_id)?;
+        let data_file = DataFile::new(&dir_path, *file_id)?;
         data_files.push(data_file);
     }
     Ok(data_files)
@@ -516,7 +519,7 @@ fn check_options(opts: &Options) -> Option<Errors> {
         return Some(Errors::DirPathIsEmpty);
     }
 
-    if opts.data_file_size <= 0 {
+    if opts.data_file_size == 0 {
         return Some(Errors::DataFileSizeTooSmall);
     }
 

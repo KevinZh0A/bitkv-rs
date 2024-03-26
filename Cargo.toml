@@ -1,7 +1,7 @@
 [package]
 name = "bitkv-rs"
 version = "0.2.1"
-author = "kevin zhang"
+authors = ["kevin zhang <kaiqiz07@gmail.com>"]
 description = "A simple k/v store API inspired by bitcask"
 edition = "2021"
 

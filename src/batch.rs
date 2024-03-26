@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    panic,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -93,7 +92,7 @@ impl WriteBatch<'_> {
         if pending_writes.len() == 0 {
             return Ok(());
         }
-        if pending_writes.len() > self.options.max_batch_num as usize {
+        if pending_writes.len() > self.options.max_batch_num {
             return Err(Errors::ExceedMaxBatchNum);
         }
 

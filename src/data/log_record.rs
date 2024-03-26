@@ -81,7 +81,7 @@ impl LogRecord {
         let mut hasher = crc32fast::Hasher::new();
         hasher.update(&buf);
         let crc = hasher.finalize();
-        buf.put_u32(crc.clone());
+        buf.put_u32(crc);
 
         (buf.to_vec(), crc)
     }

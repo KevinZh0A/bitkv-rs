@@ -42,6 +42,7 @@ pub struct IteratorOptions {
     pub reverse: bool,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for IteratorOptions {
     fn default() -> Self {
         Self {
