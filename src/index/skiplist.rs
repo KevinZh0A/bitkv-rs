@@ -1,3 +1,4 @@
+#![allow(clippy::clone_on_copy)]
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -99,7 +100,7 @@ impl IndexIterator for SkipListIterator {
         while let Some(item) = self.items.get(self.curr_index) {
             self.curr_index += 1;
             let prefix = &self.options.prefix;
-            if prefix.is_empty() || item.0.starts_with(&prefix) {
+            if prefix.is_empty() || item.0.starts_with(prefix) {
                 return Some((&item.0, &item.1));
             }
         }

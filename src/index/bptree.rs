@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{fs, path::Path, sync::Arc};
 
 use bytes::Bytes;
 use jammdb::{Error, DB};
@@ -144,7 +140,7 @@ impl IndexIterator for BPTreeIterator {
         while let Some(item) = self.items.get(self.curr_index) {
             self.curr_index += 1;
             let prefix = &self.options.prefix;
-            if prefix.is_empty() || item.0.starts_with(&prefix) {
+            if prefix.is_empty() || item.0.starts_with(prefix) {
                 return Some((&item.0, &item.1));
             }
         }
@@ -155,9 +151,9 @@ impl IndexIterator for BPTreeIterator {
 #[cfg(test)]
 mod tests {
 
-    use std::fs;
-
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn test_bptree_put() {

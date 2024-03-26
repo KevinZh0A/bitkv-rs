@@ -31,7 +31,7 @@ pub fn new_indexer(index_type: &IndexType, dir_path: &PathBuf) -> Box<dyn Indexe
     match *index_type {
         IndexType::BTree => Box::new(btree::BTree::new()),
         IndexType::SkipList => Box::new(skiplist::SkipList::new()),
-        IndexType::BPlusTree => Box::new(bptree::BPlusTree::new(&dir_path)),
+        IndexType::BPlusTree => Box::new(bptree::BPlusTree::new(dir_path)),
     }
 }
 

@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf};
+#![allow(clippy::field_reassign_with_default)]
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use log::error;
 
@@ -171,15 +175,21 @@ impl Engine {
     }
 }
 
-fn get_merge_path(dir_path: &PathBuf) -> PathBuf {
-    let file_name = dir_path.file_name().unwrap();
+fn get_merge_path<P>(dir_path: P) -> PathBuf
+where
+    P: AsRef<Path>,
+{
+    let file_name = dir_path.as_ref().file_name().unwrap();
     let merge_name = format!("{}-{}", file_name.to_str().unwrap(), MERGE_DIR_NAME);
-    let parent = dir_path.parent().unwrap();
+    let parent = dir_path.as_ref().parent().unwrap();
     parent.to_path_buf().join(merge_name)
 }
 
 // load merge files
-pub(crate) fn load_merge_files(dir_path: &PathBuf) -> Result<()> {
+pub(crate) fn load_merge_files<P>(dir_path: P) -> Result<()>
+where
+    P: AsRef<Path>,
+{
     let merge_path = get_merge_path(&dir_path);
     // merge never happened, just return
     if !merge_path.is_dir() {
@@ -197,20 +207,18 @@ pub(crate) fn load_merge_files(dir_path: &PathBuf) -> Result<()> {
     // check if merge finished file exists
     let mut merge_file_names = Vec::new();
     let mut merge_finished = false;
-    for file in dir {
-        if let Ok(entry) = file {
-            let file_os_str = entry.file_name();
-            let file_name = file_os_str.to_str().unwrap();
+    for file in dir.flatten() {
+        let file_os_str = file.file_name();
+        let file_name = file_os_str.to_str().unwrap();
 
-            if file_name.ends_with(MERGE_FINISHED_FILE_NAME) {
-                merge_finished = true;
-            }
-
-            if file_name.ends_with(SEQ_NO_FILE_NAME) {
-                continue;
-            }
-            merge_file_names.push(entry.file_name());
+        if file_name.ends_with(MERGE_FINISHED_FILE_NAME) {
+            merge_finished = true;
         }
+
+        if file_name.ends_with(SEQ_NO_FILE_NAME) {
+            continue;
+        }
+        merge_file_names.push(file.file_name());
     }
 
     // if merge doesn't finish, remove merge dir and return
@@ -236,7 +244,7 @@ pub(crate) fn load_merge_files(dir_path: &PathBuf) -> Result<()> {
     // move temporary merge files to database dir
     for file_name in merge_file_names {
         let src_path = merge_path.join(&file_name);
-        let dst_path = dir_path.join(&file_name);
+        let dst_path = dir_path.as_ref().join(&file_name);
         fs::rename(src_path, dst_path).unwrap();
     }
 

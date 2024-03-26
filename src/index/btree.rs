@@ -20,6 +20,7 @@ impl BTree {
     }
 }
 
+#[allow(clippy::clone_on_copy)]
 impl Indexer for BTree {
     fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool {
         let mut write_guard = self.tree.write();
@@ -43,7 +44,7 @@ impl Indexer for BTree {
         let mut keys = Vec::with_capacity(read_guard.len());
 
         for (k, _) in read_guard.iter() {
-            keys.push(Bytes::copy_from_slice(&k));
+            keys.push(Bytes::copy_from_slice(k));
         }
         Ok(keys)
     }
@@ -102,7 +103,7 @@ impl IndexIterator for BTreeIterator {
         while let Some(item) = self.items.get(self.curr_index) {
             self.curr_index += 1;
             let prefix = &self.options.prefix;
-            if prefix.is_empty() || item.0.starts_with(&prefix) {
+            if prefix.is_empty() || item.0.starts_with(prefix) {
                 return Some((&item.0, &item.1));
             }
         }

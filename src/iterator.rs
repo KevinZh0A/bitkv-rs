@@ -59,7 +59,7 @@ impl Iterator<'_> {
         if let Some(item) = index_iter.next() {
             let val = self
                 .engine
-                .get_value_by_position(&item.1)
+                .get_value_by_position(item.1)
                 .expect("failed to get value from data file");
             return Some((Bytes::from(item.0.to_vec()), val));
         }
