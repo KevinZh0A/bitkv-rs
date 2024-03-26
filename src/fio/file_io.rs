@@ -19,18 +19,15 @@ impl FileIO {
         match OpenOptions::new()
             .create(true)
             .read(true)
-            .write(true)
             .append(true)
             .open(file_name)
         {
-            Ok(file) => {
-                return Ok(FileIO {
-                    fd: Arc::new(RwLock::new(file)),
-                });
-            }
+            Ok(file) => Ok(FileIO {
+                fd: Arc::new(RwLock::new(file)),
+            }),
             Err(e) => {
                 error!("failed to open data file error: {}", e);
-                return Err(Errors::FailedToOpenDataFile);
+                Err(Errors::FailedToOpenDataFile)
             }
         }
     }
@@ -40,23 +37,23 @@ impl IOManager for FileIO {
     fn read(&self, buf: &mut [u8], offset: u64) -> Result<usize> {
         let read_guard = self.fd.read();
         match read_guard.read_at(buf, offset) {
-            Ok(n) => return Ok(n),
+            Ok(n) => Ok(n),
             Err(e) => {
                 error!("read from date file error: {}", e);
-                return Err(Errors::FailedToReadFromDataFile);
+                Err(Errors::FailedToReadFromDataFile)
             }
-        };
+        }
     }
 
     fn write(&self, buf: &[u8]) -> Result<usize> {
         let mut write_guard = self.fd.write();
         match write_guard.write(buf) {
-            Ok(n) => return Ok(n),
+            Ok(n) => Ok(n),
             Err(e) => {
                 error!("write to data file error: {}", e);
-                return Err(Errors::FailedToWriteToDataFile);
+                Err(Errors::FailedToWriteToDataFile)
             }
-        };
+        }
     }
 
     fn sync(&self) -> Result<()> {
