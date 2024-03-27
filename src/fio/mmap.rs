@@ -67,7 +67,7 @@ impl IOManager for MMapIO {
 
 #[cfg(test)]
 mod tests {
-  use std::fs;
+  use std::{fs, path::PathBuf};
 
   use crate::fio::file_io::FileIO;
 
