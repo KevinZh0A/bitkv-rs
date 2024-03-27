@@ -19,6 +19,9 @@ pub struct Options {
 
   // use mmap or not
   pub mmap_at_startup: bool,
+
+  // merge threshold
+  pub file_merge_threshold: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +45,7 @@ impl Default for Options {
       bytes_per_sync: 0,
       index_type: IndexType::BTree,
       mmap_at_startup: true,
+      file_merge_threshold: 0.6,
     }
   }
 }

@@ -9,5 +9,6 @@
         "bitkv",
         "BPTREE",
         "skiplist"
-    ]
+    ],
+    "C_Cpp.intelliSenseEngineFallback": "enabled"
 }

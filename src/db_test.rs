@@ -1,11 +1,11 @@
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 use bytes::Bytes;
 
 use crate::{
   db::Engine,
   errors::Errors,
-  option::Options,
+  option::{self, Options},
   util::rand_kv::{get_test_key, get_test_value},
 };
 
@@ -232,4 +232,29 @@ fn test_engine_filelock() {
 
   // delete tested files
   std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
+}
+
+#[test]
+fn test_engine_stat() {
+  let mut opts = option::Options::default();
+  opts.dir_path = PathBuf::from("/tmp/bitkv-rs-stat");
+  opts.data_file_size = 64 * 1024 * 1024; // 64MB
+  let engine = Engine::open(opts.clone()).expect("fail to open engine");
+
+  for i in 0..=10000 {
+    let res = engine.put(get_test_key(i), get_test_value(i));
+    assert!(res.is_ok());
+  }
+  for i in 0..=1000 {
+    let res = engine.put(get_test_key(i), get_test_value(i));
+    assert!(res.is_ok());
+  }
+  for i in 2000..=5000 {
+    let res = engine.delete(get_test_key(i));
+    assert!(res.is_ok());
+  }
+  let stat = engine.get_engine_stat().unwrap();
+  assert!(stat.reclaim_size > 0);
+
+  fs::remove_dir_all(opts.clone().dir_path).unwrap();
 }

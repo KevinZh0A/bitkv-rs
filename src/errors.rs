@@ -59,6 +59,15 @@ pub enum Errors {
 
   #[error("the database directory is used by another process")]
   DatabaseIsUsing,
+
+  #[error("invalid merge threshold value, must be in range (0, 1)")]
+  InvalidMergeThreshold,
+
+  #[error("merge threshold is unreached")]
+  MergeThresholdUnreached,
+
+  #[error("disk space is not enough for merge")]
+  MergeNoEnoughSpace,
 }
 
 pub type Result<T> = result::Result<T, Errors>;
