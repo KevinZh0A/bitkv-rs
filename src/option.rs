@@ -11,6 +11,9 @@ pub struct Options {
   // sync writes or not
   pub sync_writes: bool,
 
+  // the number of bytes to write before sync
+  pub bytes_per_sync: usize,
+
   // index type option
   pub index_type: IndexType,
 }
@@ -33,7 +36,8 @@ impl Default for Options {
       dir_path: std::env::temp_dir().join("bitkv-rs"),
       data_file_size: 256 * 1024 * 1024, // 256MB
       sync_writes: false,
-      index_type: IndexType::BPlusTree,
+      bytes_per_sync: 0,
+      index_type: IndexType::BTree,
     }
   }
 }
