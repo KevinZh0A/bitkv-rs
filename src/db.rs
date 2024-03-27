@@ -19,7 +19,7 @@ use std::{
   fs::{self, File},
   path::Path,
   sync::{
-  atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicUsize, Ordering},
     Arc,
   },
 };
@@ -46,6 +46,7 @@ pub struct Engine {
   pub(crate) seq_file_exists: bool,   // whether the seq_no file exists
   pub(crate) is_initial: bool,        // whether the engine is initialized
   lock_file: File, // file lock, ensure only one engine instance can open the database directory
+  bytes_write: Arc<AtomicUsize>, // the add up number of bytes written
 }
 
 impl Engine {
@@ -71,11 +72,11 @@ impl Engine {
     // determine if dir is empty, if empty, set is_initial to true
     let lock_file = fs::OpenOptions::new()
       .read(true)
-      .write(true)
       .create(true)
+      .append(true)
       .open(dir_path.join(FILE_LOCK_NAME))
       .unwrap();
-    if let Err(_) = lock_file.try_lock_exclusive() {
+    if lock_file.try_lock_exclusive().is_err() {
       return Err(Errors::DatabaseIsUsing);
     }
 
@@ -125,6 +126,7 @@ impl Engine {
       seq_file_exists: false,
       is_initial,
       lock_file,
+      bytes_write: Arc::new(AtomicUsize::new(0)),
     };
 
     // if not B+Tree index type, load index from hint file and data files
@@ -326,9 +328,24 @@ impl Engine {
     let write_off = active_file.get_write_off();
     active_file.write(&enc_record)?;
 
+    let previous = self
+      .bytes_write
+      .fetch_add(enc_record.len(), Ordering::SeqCst);
+
     // options to sync or not
-    if self.options.sync_writes {
+    let mut need_sync = self.options.sync_writes;
+    if !need_sync
+      && self.options.bytes_per_sync > 0
+      && previous + enc_record.len() >= self.options.bytes_per_sync
+    {
+      need_sync = true;
+      self.bytes_write.store(0, Ordering::SeqCst);
+    }
+
+    if need_sync {
       active_file.sync()?;
+
+      self.bytes_write.store(0, Ordering::SeqCst);
     }
 
     // construct log record return info

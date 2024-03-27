@@ -1,7 +1,7 @@
 use std::{fs, path::Path, sync::Arc};
 
 use bytes::Bytes;
-use jammdb::{Error, DB};
+use jammdb::{Bucket, Error, DB};
 
 use crate::{
   data::log_record::{decode_log_record_pos, LogRecordPos},
@@ -25,59 +25,79 @@ impl BPlusTree {
     P: AsRef<Path>,
   {
     if !dir_path.as_ref().exists() {
-      fs::create_dir_all(&dir_path).unwrap();
+      fs::create_dir_all(&dir_path).expect("fail to create b+ tree dir");
     }
-    let bptree =
-      DB::open(dir_path.as_ref().join(BPTREE_INDEX_FILE_NAME)).expect("fail to open b+ tree");
+    let path = dir_path.as_ref().join(BPTREE_INDEX_FILE_NAME);
+    let bptree = DB::open(&path.as_path()).expect("fail to open b+ tree");
     let tree = Arc::new(bptree);
     let tx = tree.tx(true).expect("failed to begin tx");
     tx.get_or_create_bucket(BPTREE_BUCKET_NAME).unwrap();
     tx.commit().unwrap();
-    tree.into()
-  }
-}
-
-impl From<Arc<DB>> for BPlusTree {
-  fn from(tree: Arc<DB>) -> Self {
     Self { tree }
+  }
+
+  fn with_tx_and_bucket<F>(&self, write: bool, action: F) -> Result<()>
+  where
+    F: FnOnce(&Bucket) -> Result<()>,
+  {
+    let tx = self.tree.tx(write).expect("failed to begin tx");
+    let bucket = tx
+      .get_bucket(BPTREE_BUCKET_NAME)
+      .expect("failed to get bucket");
+    action(&bucket)?;
+    tx.commit().expect("failed to commit tx");
+    Ok(())
   }
 }
 
 impl Indexer for BPlusTree {
   fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool {
-    let tx = self.tree.tx(true).expect("failed to begin tx");
-    let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
-    bucket
-      .put(key, pos.encode())
-      .expect("failed to put k/v pair");
-    tx.commit().unwrap();
-    true
+    self
+      .with_tx_and_bucket(true, |bucket| {
+        bucket
+          .put(key, pos.encode())
+          .expect("failed to put k/v pair");
+        Ok(())
+      })
+      .is_ok()
   }
 
   fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
     let tx = self.tree.tx(false).expect("failed to begin tx");
-    let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
-    if let Some(kv) = bucket.get_kv(key) {
-      return Some(decode_log_record_pos(kv.value().to_vec()));
-    }
-    None
+    let bucket = tx
+      .get_bucket(BPTREE_BUCKET_NAME)
+      .expect("failed to get bucket");
+    bucket
+      .get_kv(key)
+      .map(|kv| decode_log_record_pos(kv.value().to_vec()))
   }
 
   fn delete(&self, key: Vec<u8>) -> bool {
-    let tx = self.tree.tx(true).expect("failed to begin tx");
-    let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
-    if let Err(e) = bucket.delete(key) {
-      if e == Error::KeyValueMissing {
-        return false;
+    if let Ok(tx) = self.tree.tx(true) {
+      if let Ok(bucket) = tx.get_bucket(BPTREE_BUCKET_NAME) {
+        match bucket.delete(&key) {
+          Ok(_) => {
+            if let Ok(_) = tx.commit() {
+              return true; // Success delete
+            }
+          }
+          Err(e) => {
+            // specifiy the error type, key-value missing
+            if e == Error::KeyValueMissing {
+              return false; // Key-value missing error, return false
+            }
+          }
+        }
       }
-    };
-    tx.commit().unwrap();
-    true
+    }
+    false
   }
 
   fn list_keys(&self) -> Result<Vec<Bytes>> {
     let tx = self.tree.tx(false).expect("failed to begin tx");
-    let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
+    let bucket = tx
+      .get_bucket(BPTREE_BUCKET_NAME)
+      .expect("failed to get bucket");
     let mut keys = Vec::new();
 
     for data in bucket.cursor() {
@@ -87,18 +107,22 @@ impl Indexer for BPlusTree {
   }
 
   fn iterator(&self, options: IteratorOptions) -> Box<dyn IndexIterator> {
-    let mut items = Vec::new();
     let tx = self.tree.tx(false).expect("failed to begin tx");
-    let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
+    let bucket = tx
+      .get_bucket(BPTREE_BUCKET_NAME)
+      .expect("failed to get bucket");
+    let mut items = Vec::new();
 
     for data in bucket.cursor() {
       let key = data.key().to_vec();
       let pos = decode_log_record_pos(data.kv().value().to_vec());
       items.push((key, pos));
     }
+
     if options.reverse {
       items.reverse();
     }
+
     Box::new(BPTreeIterator {
       items,
       curr_index: 0,
