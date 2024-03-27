@@ -1,4 +1,5 @@
 pub mod file_io;
+pub mod mmap;
 
 use std::path::PathBuf;
 
