@@ -11,12 +11,44 @@ use crate::{
   data::log_record::max_log_record_header_size,
   errors::{Errors, Result},
   fio::{new_io_manager, IOManager},
+  option::IOManagerType,
 };
 
 pub const DATA_FILE_NAME_SUFFIX: &str = ".data";
 pub const HINT_FILE_NAME: &str = "hint-index";
 pub const MERGE_FINISHED_FILE_NAME: &str = "merge-finished";
 pub const SEQ_NO_FILE_NAME: &str = "seq-no";
+
+#[macro_export]
+macro_rules! new_data_file {
+  () => {
+      pub fn new<P: AsRef<std::path::Path>>(dir_path: P, file_id: u32, io_type: IOManagerType) -> Result<Self> {
+          let file_name = get_data_file_name(&dir_path, file_id);
+          let io_manager = new_io_manager(&file_name, &io_type);
+          Ok(Self {
+              file_id: std::sync::Arc::new(parking_lot::RwLock::new(file_id)),
+              write_off: std::sync::Arc::new(parking_lot::RwLock::new(0)),
+              io_manager,
+          })
+      }
+  };
+  ($($name:ident, $file_id:expr, $io_type:expr, $file_name:expr);*;) => {
+      $(
+          pub fn $name<P: AsRef<std::path::Path>>(dir_path: P) -> Result<Self> {
+              let file_name = $file_name.map_or_else(
+                  || panic!("File name must be provided"),
+                  |name| dir_path.as_ref().join(name),
+              );
+              let io_manager = new_io_manager(&file_name, &$io_type);
+              Ok(Self {
+                  file_id: std::sync::Arc::new(parking_lot::RwLock::new($file_id)),
+                  write_off: std::sync::Arc::new(parking_lot::RwLock::new(0)),
+                  io_manager,
+              })
+          }
+      )*
+  };
+}
 
 pub struct DataFile {
   file_id: Arc<RwLock<u32>>,      // data file id
@@ -25,74 +57,24 @@ pub struct DataFile {
 }
 
 impl DataFile {
-  /// create or open a new data file
-  pub fn new<P>(dir_path: P, file_id: u32) -> Result<DataFile>
-  where
-    P: AsRef<Path>,
-  {
-    // get filename by file_id and dir_path
-    let file_name = get_data_file_name(&dir_path, file_id);
+  // create or open a new data file
+  new_data_file!();
 
-    // initialize IO manager
-    let io_manager = new_io_manager(&file_name)?;
-
-    Ok(DataFile {
-      file_id: Arc::new(RwLock::new(file_id)),
-      write_off: Arc::new(RwLock::new(0)),
-      io_manager: Box::new(io_manager),
-    })
-  }
-
-  /// create a new hint file
-  pub fn new_hint_file<P>(dir_path: P) -> Result<DataFile>
-  where
-    P: AsRef<Path>,
-  {
-    let file_name = dir_path.as_ref().join(HINT_FILE_NAME);
-
-    // initialize IO manager
-    let io_manager = new_io_manager(&file_name)?;
-
-    Ok(DataFile {
-      file_id: Arc::new(RwLock::new(0)),
-      write_off: Arc::new(RwLock::new(0)),
-      io_manager: Box::new(io_manager),
-    })
-  }
-  // create or open a new merge finished file
-  pub fn new_merge_fin_file<P>(dir_path: P) -> Result<DataFile>
-  where
-    P: AsRef<Path>,
-  {
-    let file_name = dir_path.as_ref().join(MERGE_FINISHED_FILE_NAME);
-
-    // initialize IO manager
-    let io_manager = new_io_manager(&file_name)?;
-
-    Ok(DataFile {
-      file_id: Arc::new(RwLock::new(0)),
-      write_off: Arc::new(RwLock::new(0)),
-      io_manager: Box::new(io_manager),
-    })
-  }
-
-  // create or open a new merge finished file
-  pub fn new_seq_no_file<P>(dir_path: P) -> Result<DataFile>
-  where
-    P: AsRef<Path>,
-  {
-    let file_name = dir_path.as_ref().join(SEQ_NO_FILE_NAME);
-
-    // initialize IO manager
-    let io_manager = new_io_manager(&file_name)?;
-
-    Ok(DataFile {
-      file_id: Arc::new(RwLock::new(0)),
-      write_off: Arc::new(RwLock::new(0)),
-      io_manager: Box::new(io_manager),
-    })
-  }
-
+  // create or open hint file, merge finished file and sequence number file
+  new_data_file!(
+    new_hint_file,
+    0,
+    IOManagerType::StandardFileIO,
+    Some(HINT_FILE_NAME);
+    new_merge_fin_file,
+    0,
+    IOManagerType::StandardFileIO,
+    Some(MERGE_FINISHED_FILE_NAME);
+    new_seq_no_file,
+    0,
+    IOManagerType::StandardFileIO,
+    Some(SEQ_NO_FILE_NAME);
+  );
   pub fn file_size(&self) -> u64 {
     self.io_manager.size()
   }
@@ -184,6 +166,13 @@ impl DataFile {
   pub fn sync(&self) -> Result<()> {
     self.io_manager.sync()
   }
+
+  pub fn set_io_manager<P>(&mut self, dir_path: P, io_type: IOManagerType)
+  where
+    P: AsRef<Path>,
+  {
+    self.io_manager = new_io_manager(&get_data_file_name(dir_path, self.get_file_id()), &io_type);
+  }
 }
 
 /// get filename
@@ -202,17 +191,17 @@ mod tests {
   #[test]
   fn test_new_data_file() {
     let dir_path = std::env::temp_dir();
-    let data_file_res = DataFile::new(&dir_path, 0);
+    let data_file_res = DataFile::new(&dir_path, 0, IOManagerType::StandardFileIO);
     assert!(data_file_res.is_ok());
     let data_file = data_file_res.unwrap();
     assert_eq!(data_file.get_file_id(), 0);
 
-    let data_file_res2 = DataFile::new(&dir_path, 0);
+    let data_file_res2 = DataFile::new(&dir_path, 0, IOManagerType::StandardFileIO);
     assert!(data_file_res2.is_ok());
     let data_file2 = data_file_res2.unwrap();
     assert_eq!(data_file2.get_file_id(), 0);
 
-    let data_file_res3 = DataFile::new(&dir_path, 160);
+    let data_file_res3 = DataFile::new(&dir_path, 160, IOManagerType::StandardFileIO);
     assert!(data_file_res3.is_ok());
     let data_file3 = data_file_res3.unwrap();
     assert_eq!(data_file3.get_file_id(), 160);
@@ -221,7 +210,7 @@ mod tests {
   #[test]
   fn test_data_file_write() {
     let dir_path = std::env::temp_dir();
-    let data_file_res = DataFile::new(&dir_path, 2);
+    let data_file_res = DataFile::new(&dir_path, 2, IOManagerType::StandardFileIO);
     assert!(data_file_res.is_ok());
     let data_file = data_file_res.unwrap();
     assert_eq!(data_file.get_file_id(), 2);
@@ -238,7 +227,7 @@ mod tests {
   #[test]
   fn test_data_file_sync() {
     let dir_path = std::env::temp_dir();
-    let data_file_res = DataFile::new(&dir_path, 3);
+    let data_file_res = DataFile::new(&dir_path, 3, IOManagerType::StandardFileIO);
     assert!(data_file_res.is_ok());
     let data_file = data_file_res.unwrap();
     assert_eq!(data_file.get_file_id(), 3);
@@ -250,7 +239,7 @@ mod tests {
   #[test]
   fn test_data_file_read_log_record() {
     let dir_path = std::env::temp_dir();
-    let data_file_res = DataFile::new(&dir_path, 600);
+    let data_file_res = DataFile::new(&dir_path, 600, IOManagerType::StandardFileIO);
     assert!(data_file_res.is_ok());
     let data_file = data_file_res.unwrap();
     assert_eq!(data_file.get_file_id(), 600);

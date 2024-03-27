@@ -7,7 +7,7 @@ use std::{
   fs::{File, OpenOptions},
   io::Write,
   os::unix::fs::FileExt,
-  path::PathBuf,
+  path::Path,
   sync::Arc,
 };
 
@@ -17,7 +17,10 @@ pub struct FileIO {
 }
 
 impl FileIO {
-  pub fn new(file_name: &PathBuf) -> Result<Self> {
+  pub fn new<P>(file_name: P) -> Result<Self>
+  where
+    P: AsRef<Path>,
+  {
     match OpenOptions::new()
       .create(true)
       .read(true)
@@ -75,7 +78,7 @@ impl IOManager for FileIO {
 
 #[cfg(test)]
 mod tests {
-  use std::fs;
+  use std::{fs, path::PathBuf};
 
   use super::*;
 

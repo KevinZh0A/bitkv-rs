@@ -16,6 +16,12 @@ pub struct Options {
 
   // index type option
   pub index_type: IndexType,
+
+  // use mmap or not
+  pub mmap_at_startup: bool,
+
+  // merge threshold
+  pub file_merge_threshold: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +44,8 @@ impl Default for Options {
       sync_writes: false,
       bytes_per_sync: 0,
       index_type: IndexType::BTree,
+      mmap_at_startup: true,
+      file_merge_threshold: 0.6,
     }
   }
 }
@@ -71,4 +79,13 @@ impl Default for WriteBatchOptions {
       sync_writes: true,
     }
   }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IOManagerType {
+  // Standard IO file
+  StandardFileIO,
+
+  // Memory Map IO
+  MemoryMap,
 }

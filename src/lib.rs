@@ -8,6 +8,6 @@ mod util;
 pub mod batch;
 pub mod db;
 #[cfg(test)]
-mod dbtest;
+mod db_test;
 pub mod merge;
 pub mod option;

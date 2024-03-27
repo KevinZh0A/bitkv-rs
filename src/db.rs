@@ -8,7 +8,8 @@ use crate::{
   errors::{Errors, Result},
   index,
   merge::load_merge_files,
-  option::{IndexType, Options},
+  option::{IOManagerType, IndexType, Options},
+  util,
 };
 use bytes::Bytes;
 use fs2::FileExt;
@@ -47,6 +48,23 @@ pub struct Engine {
   pub(crate) is_initial: bool,        // whether the engine is initialized
   lock_file: File, // file lock, ensure only one engine instance can open the database directory
   bytes_write: Arc<AtomicUsize>, // the add up number of bytes written
+  pub(crate) reclaim_size: Arc<AtomicUsize>, // the add up number of bytes to be merged
+}
+
+// engine statistics info
+#[derive(Debug, Clone)]
+pub struct Stat {
+  // number of keys
+  pub key_num: usize,
+
+  // number of data files
+  pub data_file_num: usize,
+
+  // number of data files to be merged
+  pub reclaim_size: usize,
+
+  // total directory size on disk
+  pub disk_size: u64,
 }
 
 impl Engine {
@@ -88,7 +106,7 @@ impl Engine {
     load_merge_files(dir_path)?;
 
     // load data files
-    let mut data_files = load_data_files(dir_path)?;
+    let mut data_files = load_data_files(dir_path, options.mmap_at_startup)?;
 
     // set file id info
     let mut file_ids = Vec::new();
@@ -110,7 +128,7 @@ impl Engine {
     // Retrieve the active data file, which is the last one in the data_files
     let active_file = match data_files.pop() {
       Some(v) => v,
-      None => DataFile::new(dir_path, INITIAL_FILE_ID)?,
+      None => DataFile::new(dir_path, INITIAL_FILE_ID, IOManagerType::StandardFileIO)?,
     };
 
     // create a new engine instance
@@ -127,6 +145,7 @@ impl Engine {
       is_initial,
       lock_file,
       bytes_write: Arc::new(AtomicUsize::new(0)),
+      reclaim_size: Arc::new(AtomicUsize::new(0)),
     };
 
     // if not B+Tree index type, load index from hint file and data files
@@ -155,6 +174,11 @@ impl Engine {
           engine
             .seq_no
             .store(curr_seq_no + 1, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        // reset io_manager type
+        if engine.options.mmap_at_startup {
+          engine.reset_io_type();
         }
       }
     }
@@ -194,6 +218,18 @@ impl Engine {
     read_guard.sync()
   }
 
+  pub fn get_engine_stat(&self) -> Result<Stat> {
+    let keys = self.list_keys()?;
+    let old_files = self.old_data_files.read();
+
+    Ok(Stat {
+      key_num: keys.len(),
+      data_file_num: old_files.len() + 1,
+      reclaim_size: self.reclaim_size.load(Ordering::SeqCst),
+      disk_size: util::file::dir_disk_size(&self.options.dir_path),
+    })
+  }
+
   /// store a key/value pair, ensuring key isn't null.
   pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
     // if the key is valid
@@ -212,9 +248,10 @@ impl Engine {
     let log_record_pos = self.append_log_record(&mut record)?;
 
     // update index
-    let ok = self.index.put(key.to_vec(), log_record_pos);
-    if !ok {
-      return Err(Errors::IndexUpdateFailed);
+    if let Some(old_pos) = self.index.put(key.to_vec(), log_record_pos) {
+      self
+        .reclaim_size
+        .fetch_add(old_pos.size as usize, Ordering::SeqCst);
     }
     Ok(())
   }
@@ -240,12 +277,16 @@ impl Engine {
     };
 
     // appending write to active file
-    self.append_log_record(&mut record)?;
+    let pos = self.append_log_record(&mut record)?;
+    self
+      .reclaim_size
+      .fetch_add(pos.size as usize, Ordering::SeqCst);
 
     // delete key in index
-    let ok = self.index.delete(key.to_vec());
-    if !ok {
-      return Err(Errors::IndexUpdateFailed);
+    if let Some(old_pos) = self.index.delete(key.to_vec()) {
+      self
+        .reclaim_size
+        .fetch_add(old_pos.size as usize, Ordering::SeqCst);
     }
     Ok(())
   }
@@ -316,11 +357,11 @@ impl Engine {
 
       // insert old data file to hash map
       let mut old_files = self.old_data_files.write();
-      let old_file = DataFile::new(dir_path, current_fid)?;
+      let old_file = DataFile::new(dir_path, current_fid, IOManagerType::StandardFileIO)?;
       old_files.insert(current_fid, old_file);
 
       // open a new active data file
-      let new_file = DataFile::new(dir_path, current_fid + 1)?;
+      let new_file = DataFile::new(dir_path, current_fid + 1, IOManagerType::StandardFileIO)?;
       *active_file = new_file;
     }
 
@@ -352,6 +393,7 @@ impl Engine {
     Ok(LogRecordPos {
       file_id: active_file.get_file_id(),
       offset: write_off,
+      size: enc_record.len() as u32,
     })
   }
 
@@ -412,10 +454,11 @@ impl Engine {
           }
         };
 
-        // construct mem index
+        // construct memory index
         let log_record_pos = LogRecordPos {
           file_id: *file_id,
           offset,
+          size: size as u32,
         };
 
         // parse key, obtain actual key and seq_no
@@ -484,15 +527,45 @@ impl Engine {
     (true, seq_no)
   }
 
+  /// Updates in-memory index upon loading
+  ///
+  /// This function updates the in-memory data based on the type of log record (normal or deleted).
+  /// For a normal record, it adds or updates the key's position in the index. If the key previously existed,
+  /// it increments a counter for reclaimed space size with the old position's size.
+  /// For a deleted record, it removes the key from the index and updates the reclaimed space size counter accordingly.
+  ///
   fn update_index(&self, key: Vec<u8>, rec_type: LogRecordType, pos: LogRecordPos) -> Result<()> {
     if rec_type == LogRecordType::Normal {
-      self.index.put(key.clone(), pos);
+      if let Some(old_pos) = self.index.put(key.clone(), pos) {
+        // Increments the reclaimed space size counter by the size of the old position.
+        self
+          .reclaim_size
+          .fetch_add(old_pos.size as usize, Ordering::SeqCst);
+      }
     }
 
     if rec_type == LogRecordType::Deleted {
-      self.index.delete(key);
+      // Starts with the current record's size for the reclaimed space.
+      let mut size = pos.size;
+      // Attempts to remove the key from the index. If the key exists, returns the old position.
+      if let Some(old_pos) = self.index.delete(key) {
+        // Adds the size of the old position to the reclaimed space size.
+        size += old_pos.size;
+      }
+      // Updates the reclaimed space size counter.
+      self.reclaim_size.fetch_add(size as usize, Ordering::SeqCst);
     }
     Ok(())
+  }
+
+  /// reset io_manager type for all data files
+  fn reset_io_type(&self) {
+    let mut active_file = self.active_data_file.write();
+    active_file.set_io_manager(&self.options.dir_path, IOManagerType::StandardFileIO);
+    let mut old_files = self.old_data_files.write();
+    for (_, file) in old_files.iter_mut() {
+      file.set_io_manager(&self.options.dir_path, IOManagerType::StandardFileIO);
+    }
   }
 }
 
@@ -505,7 +578,7 @@ impl Drop for Engine {
 }
 
 // load data files from database directory
-fn load_data_files<P>(dir_path: P) -> Result<Vec<DataFile>>
+fn load_data_files<P>(dir_path: P, use_mmap: bool) -> Result<Vec<DataFile>>
 where
   P: AsRef<Path>,
 {
@@ -547,7 +620,11 @@ where
 
   // traverse file_ids, sequentially loading data files
   for file_id in file_ids.iter() {
-    let data_file = DataFile::new(&dir_path, *file_id)?;
+    let mut io_type = IOManagerType::StandardFileIO;
+    if use_mmap {
+      io_type = IOManagerType::MemoryMap;
+    }
+    let data_file = DataFile::new(&dir_path, *file_id, io_type)?;
     data_files.push(data_file);
   }
   Ok(data_files)
@@ -561,6 +638,10 @@ fn check_options(opts: &Options) -> Option<Errors> {
 
   if opts.data_file_size == 0 {
     return Some(Errors::DataFileSizeTooSmall);
+  }
+
+  if opts.file_merge_threshold < 0 as f32 || opts.file_merge_threshold > 1 as f32 {
+    return Some(Errors::InvalidMergeThreshold);
   }
 
   None
