@@ -8,7 +8,7 @@ use crate::{
   errors::{Errors, Result},
   index,
   merge::load_merge_files,
-  option::{IndexType, Options},
+  option::{IOManagerType, IndexType, Options},
 };
 use bytes::Bytes;
 use fs2::FileExt;
@@ -88,7 +88,7 @@ impl Engine {
     load_merge_files(dir_path)?;
 
     // load data files
-    let mut data_files = load_data_files(dir_path)?;
+    let mut data_files = load_data_files(dir_path, options.mmap_at_startup)?;
 
     // set file id info
     let mut file_ids = Vec::new();
@@ -110,7 +110,7 @@ impl Engine {
     // Retrieve the active data file, which is the last one in the data_files
     let active_file = match data_files.pop() {
       Some(v) => v,
-      None => DataFile::new(dir_path, INITIAL_FILE_ID)?,
+      None => DataFile::new(dir_path, INITIAL_FILE_ID, IOManagerType::StandardFileIO)?,
     };
 
     // create a new engine instance
@@ -155,6 +155,11 @@ impl Engine {
           engine
             .seq_no
             .store(curr_seq_no + 1, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        // reset io_manager type
+        if engine.options.mmap_at_startup {
+          engine.reset_io_type();
         }
       }
     }
@@ -316,11 +321,11 @@ impl Engine {
 
       // insert old data file to hash map
       let mut old_files = self.old_data_files.write();
-      let old_file = DataFile::new(dir_path, current_fid)?;
+      let old_file = DataFile::new(dir_path, current_fid, IOManagerType::StandardFileIO)?;
       old_files.insert(current_fid, old_file);
 
       // open a new active data file
-      let new_file = DataFile::new(dir_path, current_fid + 1)?;
+      let new_file = DataFile::new(dir_path, current_fid + 1, IOManagerType::StandardFileIO)?;
       *active_file = new_file;
     }
 
@@ -494,6 +499,15 @@ impl Engine {
     }
     Ok(())
   }
+
+  fn reset_io_type(&self) {
+    let mut active_file = self.active_data_file.write();
+    active_file.set_io_manager(&self.options.dir_path, IOManagerType::StandardFileIO);
+    let mut old_files = self.old_data_files.write();
+    for (_, file) in old_files.iter_mut() {
+      file.set_io_manager(&self.options.dir_path, IOManagerType::StandardFileIO);
+    }
+  }
 }
 
 impl Drop for Engine {
@@ -505,7 +519,7 @@ impl Drop for Engine {
 }
 
 // load data files from database directory
-fn load_data_files<P>(dir_path: P) -> Result<Vec<DataFile>>
+fn load_data_files<P>(dir_path: P, use_mmap: bool) -> Result<Vec<DataFile>>
 where
   P: AsRef<Path>,
 {
@@ -547,7 +561,11 @@ where
 
   // traverse file_ids, sequentially loading data files
   for file_id in file_ids.iter() {
-    let data_file = DataFile::new(&dir_path, *file_id)?;
+    let mut io_type = IOManagerType::StandardFileIO;
+    if use_mmap {
+      io_type = IOManagerType::MemoryMap;
+    }
+    let data_file = DataFile::new(&dir_path, *file_id, io_type)?;
     data_files.push(data_file);
   }
   Ok(data_files)

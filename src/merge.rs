@@ -16,7 +16,7 @@ use crate::{
   },
   db::{Engine, FILE_LOCK_NAME},
   errors::{Errors, Result},
-  option::Options,
+  option::{IOManagerType, Options},
 };
 
 const MERGE_DIR_NAME: &str = "merge";
@@ -118,11 +118,19 @@ impl Engine {
     // sync active file
     active_file.sync()?;
     let active_file_id = active_file.get_file_id();
-    let new_active_file = DataFile::new(&self.options.dir_path, active_file_id + 1)?;
+    let new_active_file = DataFile::new(
+      &self.options.dir_path,
+      active_file_id + 1,
+      IOManagerType::StandardFileIO,
+    )?;
     *active_file = new_active_file;
 
     // load current active data file to old data files
-    let old_file = DataFile::new(&self.options.dir_path, active_file_id)?;
+    let old_file = DataFile::new(
+      &self.options.dir_path,
+      active_file_id,
+      IOManagerType::StandardFileIO,
+    )?;
     old_files.insert(active_file_id, old_file);
 
     // load id to merge file ids list
@@ -134,7 +142,11 @@ impl Engine {
     // retrieve data files
     let mut merge_files = Vec::new();
     for file_id in merge_file_ids {
-      let data_file = DataFile::new(&self.options.dir_path, file_id)?;
+      let data_file = DataFile::new(
+        &self.options.dir_path,
+        file_id,
+        IOManagerType::StandardFileIO,
+      )?;
       merge_files.push(data_file);
     }
 
