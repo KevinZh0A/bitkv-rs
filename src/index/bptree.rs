@@ -28,7 +28,7 @@ impl BPlusTree {
       fs::create_dir_all(&dir_path).expect("fail to create b+ tree dir");
     }
     let path = dir_path.as_ref().join(BPTREE_INDEX_FILE_NAME);
-    let bptree = DB::open(&path.as_path()).expect("fail to open b+ tree");
+    let bptree = DB::open(path.as_path()).expect("fail to open b+ tree");
     let tree = Arc::new(bptree);
     let tx = tree.tx(true).expect("failed to begin tx");
     tx.get_or_create_bucket(BPTREE_BUCKET_NAME).unwrap();
@@ -77,7 +77,7 @@ impl Indexer for BPlusTree {
       if let Ok(bucket) = tx.get_bucket(BPTREE_BUCKET_NAME) {
         match bucket.delete(&key) {
           Ok(_) => {
-            if let Ok(_) = tx.commit() {
+            if tx.commit().is_ok() {
               return true; // Success delete
             }
           }
