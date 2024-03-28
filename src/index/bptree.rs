@@ -60,10 +60,9 @@ impl Indexer for BPlusTree {
   fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
     let tx = self.tree.tx(false).expect("failed to begin tx");
     let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
-    match bucket.get_kv(&key) {
-      Some(kv) => Some(decode_log_record_pos(kv.value().to_vec())),
-      None => None,
-    }
+    bucket
+      .get_kv(&key)
+      .map(|kv| decode_log_record_pos(kv.value().to_vec()))
   }
 
   fn delete(&self, key: Vec<u8>) -> Option<LogRecordPos> {

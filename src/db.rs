@@ -640,7 +640,7 @@ fn check_options(opts: &Options) -> Option<Errors> {
     return Some(Errors::DataFileSizeTooSmall);
   }
 
-  if opts.file_merge_threshold < 0 as f32 || opts.file_merge_threshold > 1 as f32 {
+  if opts.file_merge_threshold < 0f32 || opts.file_merge_threshold > 1f32 {
     return Some(Errors::InvalidMergeThreshold);
   }
 
