@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-use std::result;
+use std::{fmt::Debug, result};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -57,6 +56,18 @@ pub enum Errors {
 
   #[error("cannot use write batch, seq_no does not exist")]
   UnableToUseWriteBatch,
+
+  #[error("the database directory is used by another process")]
+  DatabaseIsUsing,
+
+  #[error("invalid merge threshold value, must be in range (0, 1)")]
+  InvalidMergeThreshold,
+
+  #[error("merge threshold is unreached")]
+  MergeThresholdUnreached,
+
+  #[error("disk space is not enough for merge")]
+  MergeNoEnoughSpace,
 }
 
 pub type Result<T> = result::Result<T, Errors>;

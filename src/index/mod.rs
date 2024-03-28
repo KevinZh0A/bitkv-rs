@@ -6,19 +6,22 @@ use std::path::PathBuf;
 
 use bytes::Bytes;
 
-use crate::option::IteratorOptions;
-use crate::{data::log_record::LogRecordPos, errors::Result, option::IndexType};
+use crate::{
+  data::log_record::LogRecordPos,
+  errors::Result,
+  option::{IndexType, IteratorOptions},
+};
 
 // Abstract interface specifies methods for interchangeable indexing data structures
 pub trait Indexer: Sync + Send {
   /// Store key's position into indexer
-  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool;
+  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Option<LogRecordPos>;
 
   /// Retrieve key's position
   fn get(&self, key: Vec<u8>) -> Option<LogRecordPos>;
 
   /// Delete the position in indexer by key
-  fn delete(&self, key: Vec<u8>) -> bool;
+  fn delete(&self, key: Vec<u8>) -> Option<LogRecordPos>;
 
   /// List all keys in the indexer
   fn list_keys(&self) -> Result<Vec<Bytes>>;

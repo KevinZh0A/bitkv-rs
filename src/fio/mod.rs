@@ -1,10 +1,11 @@
 pub mod file_io;
+pub mod mmap;
 
 use std::path::PathBuf;
 
-use crate::errors::Result;
+use crate::{errors::Result, option::IOManagerType};
 
-use self::file_io::FileIO;
+use self::{file_io::FileIO, mmap::MMapIO};
 
 /// Abstract IO Management Interface, support different IO type implemented, currently standard IO file supported
 pub trait IOManager: Sync + Send {
@@ -22,6 +23,9 @@ pub trait IOManager: Sync + Send {
 }
 
 /// Initialize IO manager by filename
-pub fn new_io_manager(filename: &PathBuf) -> Result<impl IOManager> {
-  FileIO::new(filename)
+pub fn new_io_manager(filename: &PathBuf, io_type: &IOManagerType) -> Box<dyn IOManager> {
+  match *io_type {
+    IOManagerType::StandardFileIO => Box::new(FileIO::new(filename).unwrap()),
+    IOManagerType::MemoryMap => Box::new(MMapIO::new(filename).unwrap()),
+  }
 }
