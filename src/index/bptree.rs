@@ -1,7 +1,7 @@
 use std::{fs, path::Path, sync::Arc};
 
 use bytes::Bytes;
-use jammdb::{Error, DB};
+use jammdb::DB;
 
 use crate::{
   data::log_record::{decode_log_record_pos, LogRecordPos},
@@ -25,59 +25,65 @@ impl BPlusTree {
     P: AsRef<Path>,
   {
     if !dir_path.as_ref().exists() {
-      fs::create_dir_all(&dir_path).unwrap();
+      fs::create_dir_all(&dir_path).expect("fail to create b+ tree dir");
     }
-    let bptree =
-      DB::open(dir_path.as_ref().join(BPTREE_INDEX_FILE_NAME)).expect("fail to open b+ tree");
+    let path = dir_path.as_ref().join(BPTREE_INDEX_FILE_NAME);
+    let bptree = DB::open(path.as_path()).expect("fail to open b+ tree");
     let tree = Arc::new(bptree);
     let tx = tree.tx(true).expect("failed to begin tx");
     tx.get_or_create_bucket(BPTREE_BUCKET_NAME).unwrap();
     tx.commit().unwrap();
-    tree.into()
-  }
-}
-
-impl From<Arc<DB>> for BPlusTree {
-  fn from(tree: Arc<DB>) -> Self {
     Self { tree }
   }
 }
 
 impl Indexer for BPlusTree {
-  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool {
+  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Option<LogRecordPos> {
     let tx = self.tree.tx(true).expect("failed to begin tx");
     let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
+    let mut result = None;
+    // get previous value
+    if let Some(kv) = bucket.get_kv(&key) {
+      let prev_pos = decode_log_record_pos(kv.value().to_vec());
+      result = Some(prev_pos);
+    }
+
+    // put new value
     bucket
       .put(key, pos.encode())
       .expect("failed to put k/v pair");
+
     tx.commit().unwrap();
-    true
+    result
   }
 
   fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
     let tx = self.tree.tx(false).expect("failed to begin tx");
     let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
-    if let Some(kv) = bucket.get_kv(key) {
-      return Some(decode_log_record_pos(kv.value().to_vec()));
-    }
-    None
+    bucket
+      .get_kv(&key)
+      .map(|kv| decode_log_record_pos(kv.value().to_vec()))
   }
 
-  fn delete(&self, key: Vec<u8>) -> bool {
+  fn delete(&self, key: Vec<u8>) -> Option<LogRecordPos> {
     let tx = self.tree.tx(true).expect("failed to begin tx");
     let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
-    if let Err(e) = bucket.delete(key) {
-      if e == Error::KeyValueMissing {
-        return false;
-      }
-    };
+    let mut result = None;
+
+    // get previous value
+    if let Ok(kv) = bucket.delete(&key) {
+      let prev_pos = decode_log_record_pos(kv.value().to_vec());
+      result = Some(prev_pos);
+    }
     tx.commit().unwrap();
-    true
+    result
   }
 
   fn list_keys(&self) -> Result<Vec<Bytes>> {
     let tx = self.tree.tx(false).expect("failed to begin tx");
-    let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
+    let bucket = tx
+      .get_bucket(BPTREE_BUCKET_NAME)
+      .expect("failed to get bucket");
     let mut keys = Vec::new();
 
     for data in bucket.cursor() {
@@ -87,18 +93,22 @@ impl Indexer for BPlusTree {
   }
 
   fn iterator(&self, options: IteratorOptions) -> Box<dyn IndexIterator> {
-    let mut items = Vec::new();
     let tx = self.tree.tx(false).expect("failed to begin tx");
-    let bucket = tx.get_bucket(BPTREE_BUCKET_NAME).unwrap();
+    let bucket = tx
+      .get_bucket(BPTREE_BUCKET_NAME)
+      .expect("failed to get bucket");
+    let mut items = Vec::new();
 
     for data in bucket.cursor() {
       let key = data.key().to_vec();
       let pos = decode_log_record_pos(data.kv().value().to_vec());
       items.push((key, pos));
     }
+
     if options.reverse {
       items.reverse();
     }
+
     Box::new(BPTreeIterator {
       items,
       curr_index: 0,
@@ -152,7 +162,6 @@ impl IndexIterator for BPTreeIterator {
 mod tests {
 
   use super::*;
-  use std::fs;
   use std::path::PathBuf;
 
   #[test]
@@ -165,36 +174,59 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = bptree.put(
       "acdd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let res3 = bptree.put(
       "bbae".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
 
     let res4 = bptree.put(
       "ddee".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res4);
+    assert!(res4.is_none());
+
+    let res5 = bptree.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res5.is_some());
+    let v1 = res5.unwrap();
+    assert_eq!(
+      v1,
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      }
+    );
 
     fs::remove_dir_all(path).unwrap();
   }
@@ -213,9 +245,10 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let v1 = bptree.get(b"aacd".to_vec());
     assert!(v1.is_some());
@@ -225,9 +258,10 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1233,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let v2 = bptree.get(b"acdd".to_vec());
     assert!(v2.is_some());
@@ -237,9 +271,10 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1234,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
 
     let v3 = bptree.get(b"aacd".to_vec());
     assert!(v3.is_some());
@@ -249,9 +284,18 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1235,
+        size: 12,
       },
     );
-    assert!(res4);
+    assert!(res4.is_some());
+    assert_eq!(
+      res4.unwrap(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      }
+    );
 
     let v4 = bptree.get(b"aacd".to_vec());
     assert!(v4.is_some());
@@ -266,19 +310,29 @@ mod tests {
     let bptree = BPlusTree::new(&path);
 
     let res = bptree.delete(b"not exists".to_vec());
-    assert!(!res);
+    assert!(res.is_none());
 
     let res1 = bptree.put(
       "aacd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
-    let r1 = bptree.delete(b"aacd".to_vec());
-    assert!(r1);
+    let d1 = bptree.delete(b"aacd".to_vec());
+    assert!(d1.is_some());
+    let r1 = d1.unwrap();
+    assert_eq!(
+      r1,
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      }
+    );
 
     let v1 = bptree.get(b"aacd".to_vec());
     assert!(v1.is_none());
@@ -300,27 +354,30 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = bptree.put(
       "acdd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1233,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let res3 = bptree.put(
       "bbae".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1234,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
 
     let keys = bptree.list_keys().unwrap();
     assert_eq!(keys.len(), 3);
@@ -339,27 +396,30 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = bptree.put(
       "acdd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1233,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let res3 = bptree.put(
       "bbae".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1234,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
     let mut opt = IteratorOptions::default();
     opt.reverse = true;
     let mut iter1 = bptree.iterator(opt);

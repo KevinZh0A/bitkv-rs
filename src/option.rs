@@ -11,8 +11,17 @@ pub struct Options {
   // sync writes or not
   pub sync_writes: bool,
 
+  // the number of bytes to write before sync
+  pub bytes_per_sync: usize,
+
   // index type option
   pub index_type: IndexType,
+
+  // use mmap or not
+  pub mmap_at_startup: bool,
+
+  // merge threshold
+  pub file_merge_threshold: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,7 +42,10 @@ impl Default for Options {
       dir_path: std::env::temp_dir().join("bitkv-rs"),
       data_file_size: 256 * 1024 * 1024, // 256MB
       sync_writes: false,
-      index_type: IndexType::BPlusTree,
+      bytes_per_sync: 0,
+      index_type: IndexType::BTree,
+      mmap_at_startup: true,
+      file_merge_threshold: 0.6,
     }
   }
 }
@@ -67,4 +79,13 @@ impl Default for WriteBatchOptions {
       sync_writes: true,
     }
   }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IOManagerType {
+  // Standard IO file
+  StandardFileIO,
+
+  // Memory Map IO
+  MemoryMap,
 }

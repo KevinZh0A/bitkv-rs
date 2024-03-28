@@ -1,8 +1,7 @@
 use crate::{data::log_record::LogRecordPos, errors::Result, option::IteratorOptions};
 use bytes::Bytes;
 use parking_lot::RwLock;
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use super::{IndexIterator, Indexer};
 
@@ -22,10 +21,9 @@ impl BTree {
 
 #[allow(clippy::clone_on_copy)]
 impl Indexer for BTree {
-  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool {
+  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Option<LogRecordPos> {
     let mut write_guard = self.tree.write();
-    write_guard.insert(key, pos);
-    true
+    write_guard.insert(key, pos)
   }
 
   fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
@@ -33,10 +31,9 @@ impl Indexer for BTree {
     read_guard.get(&key).copied()
   }
 
-  fn delete(&self, key: Vec<u8>) -> bool {
+  fn delete(&self, key: Vec<u8>) -> Option<LogRecordPos> {
     let mut write_guard = self.tree.write();
-    let remove_res = write_guard.remove(&key);
-    remove_res.is_some()
+    write_guard.remove(&key)
   }
 
   fn list_keys(&self) -> Result<Vec<Bytes>> {
@@ -124,18 +121,30 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = bt.put(
       "aa".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 11,
         offset: 22,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
+
+    let res3 = bt.put(
+      "aa".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 114,
+        offset: 2223,
+        size: 12,
+      },
+    );
+    assert!(res3.is_some());
   }
 
   #[test]
@@ -146,18 +155,20 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = bt.put(
       "aa".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 11,
         offset: 22,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let pos1 = bt.get("".as_bytes().to_vec()).unwrap();
     println!("{:?}", pos1);
@@ -165,7 +176,8 @@ mod tests {
       pos1,
       LogRecordPos {
         file_id: 1,
-        offset: 10
+        offset: 10,
+        size: 12,
       }
     );
 
@@ -174,7 +186,8 @@ mod tests {
       pos2,
       LogRecordPos {
         file_id: 11,
-        offset: 22
+        offset: 22,
+        size: 12,
       }
     );
   }
@@ -187,27 +200,49 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = bt.put(
       "aa".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 11,
         offset: 22,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let res3 = bt.delete("".as_bytes().to_vec());
-    assert!(res3);
+    assert!(res3.is_some());
+
+    let v1 = res3.unwrap();
+    assert_eq!(
+      v1,
+      LogRecordPos {
+        file_id: 1,
+        offset: 10,
+        size: 12,
+      }
+    );
 
     let res4 = bt.delete("aa".as_bytes().to_vec());
-    assert!(res4);
+    assert!(res4.is_some());
+
+    let v2 = res4.unwrap();
+    assert_eq!(
+      v2,
+      LogRecordPos {
+        file_id: 11,
+        offset: 22,
+        size: 12,
+      }
+    );
 
     let res5 = bt.delete("".as_bytes().to_vec());
-    assert!(!res5)
+    assert!(res5.is_none());
   }
 
   #[test]
@@ -226,6 +261,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     let mut iter2 = bt.iterator(IteratorOptions::default());
@@ -244,6 +280,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     bt.put(
@@ -251,6 +288,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     bt.put(
@@ -258,6 +296,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     let mut iter4 = bt.iterator(IteratorOptions::default());
@@ -304,6 +343,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     let mut iter_opt1 = IteratorOptions::default();
@@ -317,6 +357,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     bt.put(
@@ -324,6 +365,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     bt.put(
@@ -331,6 +373,7 @@ mod tests {
       LogRecordPos {
         file_id: 1,
         offset: 10,
+        size: 12,
       },
     );
     let mut iter_opt2 = IteratorOptions::default();

@@ -22,9 +22,14 @@ impl SkipList {
 }
 
 impl Indexer for SkipList {
-  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> bool {
+  fn put(&self, key: Vec<u8>, pos: LogRecordPos) -> Option<LogRecordPos> {
+    let mut result = None;
+    if let Some(entry) = self.skl.get(&key) {
+      result = Some(*entry.value());
+    }
+
     self.skl.insert(key, pos);
-    true
+    result
   }
 
   fn get(&self, key: Vec<u8>) -> Option<LogRecordPos> {
@@ -34,9 +39,11 @@ impl Indexer for SkipList {
     None
   }
 
-  fn delete(&self, key: Vec<u8>) -> bool {
-    let remove_res = self.skl.remove(&key);
-    remove_res.is_some()
+  fn delete(&self, key: Vec<u8>) -> Option<LogRecordPos> {
+    if let Some(entry) = self.skl.remove(&key) {
+      return Some(*entry.value());
+    }
+    None
   }
 
   fn list_keys(&self) -> Result<Vec<Bytes>> {
@@ -121,36 +128,59 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = skl.put(
       "acdd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let res3 = skl.put(
       "bbae".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
 
     let res4 = skl.put(
       "ddee".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res4);
+    assert!(res4.is_none());
+
+    let res5 = skl.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res5.is_some());
+    let v1 = res5.unwrap();
+    assert_eq!(
+      v1,
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      }
+    );
   }
 
   #[test]
@@ -165,9 +195,10 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let v1 = skl.get(b"aacd".to_vec());
     assert!(v1.is_some());
@@ -177,9 +208,10 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1233,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let v2 = skl.get(b"acdd".to_vec());
     assert!(v2.is_some());
@@ -189,9 +221,10 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1234,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
 
     let v3 = skl.get(b"aacd".to_vec());
     assert!(v3.is_some());
@@ -201,9 +234,19 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1235,
+        size: 12,
       },
     );
-    assert!(res4);
+    assert!(res4.is_some());
+    let v1 = res4.unwrap();
+    assert_eq!(
+      v1,
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      }
+    );
 
     let v4 = skl.get(b"aacd".to_vec());
     assert!(v4.is_some());
@@ -214,19 +257,29 @@ mod tests {
     let skl = SkipList::new();
 
     let res = skl.delete(b"not exists".to_vec());
-    assert!(!res);
+    assert!(res.is_none());
 
     let res1 = skl.put(
       "aacd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let r1 = skl.delete(b"aacd".to_vec());
-    assert!(r1);
+    assert!(r1.is_some());
+    let v1 = r1.unwrap();
+    assert_eq!(
+      v1,
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      }
+    );
 
     let v1 = skl.get(b"aacd".to_vec());
     assert!(v1.is_none());
@@ -244,27 +297,30 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = skl.put(
       "acdd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1233,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let res3 = skl.put(
       "bbae".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1234,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
 
     let keys = skl.list_keys().unwrap();
     assert_eq!(keys.len(), 3);
@@ -279,27 +335,30 @@ mod tests {
       LogRecordPos {
         file_id: 1123,
         offset: 1232,
+        size: 12,
       },
     );
-    assert!(res1);
+    assert!(res1.is_none());
 
     let res2 = skl.put(
       "acdd".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1233,
+        size: 12,
       },
     );
-    assert!(res2);
+    assert!(res2.is_none());
 
     let res3 = skl.put(
       "bbae".as_bytes().to_vec(),
       LogRecordPos {
         file_id: 1123,
         offset: 1234,
+        size: 12,
       },
     );
-    assert!(res3);
+    assert!(res3.is_none());
     let mut opt = IteratorOptions::default();
     opt.reverse = true;
     let mut iter1 = skl.iterator(opt);

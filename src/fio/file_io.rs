@@ -3,11 +3,13 @@ use super::IOManager;
 use crate::errors::{Errors, Result};
 use log::error;
 use parking_lot::RwLock;
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::os::unix::fs::FileExt;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{
+  fs::{File, OpenOptions},
+  io::Write,
+  os::unix::fs::FileExt,
+  path::Path,
+  sync::Arc,
+};
 
 /// FileIO standard system file I/O
 pub struct FileIO {
@@ -15,7 +17,10 @@ pub struct FileIO {
 }
 
 impl FileIO {
-  pub fn new(file_name: &PathBuf) -> Result<Self> {
+  pub fn new<P>(file_name: P) -> Result<Self>
+  where
+    P: AsRef<Path>,
+  {
     match OpenOptions::new()
       .create(true)
       .read(true)
@@ -73,7 +78,7 @@ impl IOManager for FileIO {
 
 #[cfg(test)]
 mod tests {
-  use std::fs;
+  use std::{fs, path::PathBuf};
 
   use super::*;
 

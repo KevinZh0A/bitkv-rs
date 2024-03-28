@@ -2,11 +2,13 @@
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
         "./Cargo.toml",
+        "./Cargo.toml",
         "./Cargo.toml"
     ],
     "cSpell.words": [
         "bitkv",
         "BPTREE",
         "skiplist"
-    ]
+    ],
+    "C_Cpp.intelliSenseEngineFallback": "enabled"
 }
