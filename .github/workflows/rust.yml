@@ -2,25 +2,23 @@ name: Rust CI
 
 on:
   push:
-    # Ignore bors branches, since they are covered by `clippy_bors.yml`
-    branches:
-      - master
-    # Don't run Clippy tests, when only textfiles were modified
-    paths-ignore:
-      - 'README'
+    branches: ['*'] 
+    paths-ignore:   
+      # Don't run Clippy tests, when only textfiles were modified 
+      - 'README.md'
       - 'COPYRIGHT'
       - 'LICENSE-*'
-      - '**.md'
-      - '**.txt'
+      - '**/*.md'
+      - '**/*.txt'
   pull_request:
-    # Don't run Clippy tests, when only textfiles were modified
-    paths-ignore:
-      - 'README'
+    paths-ignore:  
+      # Don't run Clippy tests, when only textfiles were modified  
+      - 'README.md'
       - 'COPYRIGHT'
       - 'LICENSE-*'
-      - '**.md'
-      - '**.txt'
-  workflow_dispatch:
+      - '**/*.md'
+      - '**/*.txt'
+  workflow_dispatch: 
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,57 +27,45 @@ env:
   nightly: nightly
 
 jobs:
-  # Check formatting
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Install Rust
-      run: rustup update stable && rustup default stable
-    - name: Check formatting
-      run: cargo fmt --all -- --check
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        run: rustup update stable && rustup default stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-  # Apply clippy lints
   clippy:
     name: clippy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Apply clippy lints
-      run: cargo clippy --all-features
+      - uses: actions/checkout@v3
+      - name: Install Rust stable
+        run: rustup update stable && rustup default stable
+      - name: Apply clippy lints
+        run: cargo clippy --all-features -- -D warnings
 
   unit-tests:
     name: unit tests
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust:
-          - nightly
-        os:
-          - macos-latest
-          # - windows-latest
+        rust: [nightly]
+        os: 
           - ubuntu-latest
+          - macos-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Install latest nightly
+      - uses: actions/checkout@v3
+      - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
           override: true
           components: rustfmt, clippy
-
       - uses: Swatinem/rust-cache@v1
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: test all features
-        # Run sequentially to avoid race condition around file system size
+      - name: Run unit tests
         run: cargo test --all-features -- --test-threads 1
 
   coverage:
@@ -123,16 +109,16 @@ jobs:
           fail_ci_if_error: true
 
   docs:
-    name: docs
+    name: Generate Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.nightly }}
           override: true
       - uses: Swatinem/rust-cache@v1
-      - name: "doc --lib --all-features"
+      - name: Generate documentation
         run: cargo doc --lib --no-deps --all-features --document-private-items
         env:
           RUSTFLAGS: --cfg docsrs
