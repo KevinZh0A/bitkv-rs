@@ -17,9 +17,7 @@ Cargo.lock
 # Added by cargo
 
 /target
-<<<<<<< HEAD
 .vscode/launch.json
-=======
 
 # VSCode - Visual Studio Code files
 .vscode/
@@ -27,4 +25,3 @@ Cargo.lock
 
 # Local History for Visual Studio Code
 .history/
->>>>>>> ff26140 (chore: update ci)

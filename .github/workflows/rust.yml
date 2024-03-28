@@ -10,6 +10,7 @@ on:
       - 'LICENSE-*'
       - '**/*.md'
       - '**/*.txt'
+      - '.gitignore'
   pull_request:
     paths-ignore:  
       # Don't run Clippy tests, when only textfiles were modified  
@@ -18,6 +19,7 @@ on:
       - 'LICENSE-*'
       - '**/*.md'
       - '**/*.txt'
+      - '.gitignore'
   workflow_dispatch: 
 
 env:
