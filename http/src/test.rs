@@ -1,7 +1,5 @@
 use super::*;
-use actix_web::{http::StatusCode, test, web, App};
-use bitkv_rs::{db::Engine, option::Options};
-use serde_json::json;
+use actix_web::{http::StatusCode, test};
 
 #[actix_web::test]
 async fn test_put_handler() {
@@ -38,7 +36,7 @@ async fn test_get_handler() {
   )
   .await;
 
-  // 确保 "test" 键已经被插入
+  // Insert a key-value pair
   let _ = test::TestRequest::with_uri("/bitkv/put")
     .method(actix_web::http::Method::POST)
     .set_json(&json!({"key": "test", "value": "test value"}))
