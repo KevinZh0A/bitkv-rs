@@ -1,7 +1,5 @@
 use super::*;
-use actix_web::{
-  http::StatusCode, test, web, App
-};
+use actix_web::{http::StatusCode, test, web, App};
 use bitkv_rs::{db::Engine, option::Options};
 use serde_json::json;
 
@@ -67,9 +65,7 @@ async fn test_listkeys_handler() {
   let req = test::TestRequest::with_uri("/bitkv/listkeys").to_request();
   let resp = test::call_service(&mut app, req).await;
   assert_eq!(resp.status(), StatusCode::OK);
-
 }
-
 
 #[actix_web::test]
 async fn test_stat_handler() {
@@ -84,7 +80,7 @@ async fn test_stat_handler() {
   )
   .await;
 
-    let req = test::TestRequest::with_uri("/bitkv/stat").to_request();
-    let resp = test::call_service(&mut app, req).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+  let req = test::TestRequest::with_uri("/bitkv/stat").to_request();
+  let resp = test::call_service(&mut app, req).await;
+  assert_eq!(resp.status(), StatusCode::OK);
 }

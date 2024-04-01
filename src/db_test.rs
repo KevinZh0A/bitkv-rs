@@ -258,3 +258,28 @@ fn test_engine_stat() {
 
   fs::remove_dir_all(opts.clone().dir_path).unwrap();
 }
+
+#[test]
+fn test_engine_backup() {
+  let mut opts = option::Options::default();
+  opts.dir_path = PathBuf::from("/tmp/bitkv-rs-backup");
+  opts.data_file_size = 64 * 1024 * 1024; // 64MB
+  let engine = Engine::open(opts.clone()).expect("fail to open engine");
+
+  for i in 0..=10000 {
+    let res = engine.put(get_test_key(i), get_test_value(i));
+    assert!(res.is_ok());
+  }
+
+  let backup_dir = PathBuf::from("/tmp/bitkv-rs-backup-test");
+  let backup_res = engine.backup(backup_dir.clone());
+  assert!(backup_res.is_ok());
+
+  let mut opts1 = option::Options::default();
+  opts1.dir_path = backup_dir.clone();
+  let eng2 = Engine::open(opts1.clone());
+  assert!(eng2.is_ok());
+
+  fs::remove_dir_all(opts.clone().dir_path).unwrap();
+  fs::remove_dir_all(backup_dir.clone()).unwrap();
+}
