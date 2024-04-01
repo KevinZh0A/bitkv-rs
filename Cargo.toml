@@ -4,6 +4,10 @@ version = "0.2.1"
 authors = ["kevin zhang <kaiqiz07@gmail.com>"]
 description = "A simple k/v store API inspired by bitcask"
 edition = "2021"
+repository = "https://github.com/KevinZh0A/bitkv-rs"
+homepage = "https://github.com/KevinZh0A/bitkv-rs"
+license = "MIT"
+
 
 [workspace]
 members = [
