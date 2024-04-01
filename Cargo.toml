@@ -5,9 +5,23 @@ authors = ["kevin zhang <kaiqiz07@gmail.com>"]
 description = "A simple k/v store API inspired by bitcask"
 edition = "2021"
 
+[workspace]
+members = [
+  "http"
+]
+
 [[example]]
 name = "basic_operations"
 path = "examples/basic_operations.rs"
+
+[[bench]]
+name = "kv_bench"
+path = "benches/kv_bench.rs"
+harness = false
+
+[dev-dependencies]
+criterion ={version = "0.5.1", features = ["html_reports"]}
+
 
 [dependencies]
 bytes = "1.5.0"
@@ -22,3 +36,4 @@ jammdb = "0.11.0"
 fs2 = "0.4.3"
 memmap2 = "0.9.4" 
 fs_extra = "1.3.0"
+rand = "0.8.5"

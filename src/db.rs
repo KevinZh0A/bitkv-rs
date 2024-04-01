@@ -230,6 +230,23 @@ impl Engine {
     })
   }
 
+  /// backup data directory
+  pub fn backup<P>(&self, dir_path: P) -> Result<()>
+  where
+    P: AsRef<Path>,
+  {
+    let exclude = &[FILE_LOCK_NAME];
+    if let Err(e) = util::file::copy_dir(
+      &self.options.dir_path,
+      &dir_path.as_ref().to_path_buf(),
+      exclude,
+    ) {
+      log::error!("failed to copy data directory error: {}", e);
+      return Err(Errors::FailedToCopyDirectory);
+    }
+    Ok(())
+  }
+
   /// store a key/value pair, ensuring key isn't null.
   pub fn put(&self, key: Bytes, value: Bytes) -> Result<()> {
     // if the key is valid
@@ -398,7 +415,7 @@ impl Engine {
   }
 
   /// load memory index from data files
-  /// tranverse all data files, and process each log record
+  /// traverse all data files, and process each log record
 
   fn load_index_from_data_files(&self) -> Result<usize> {
     let mut current_seq_no = NON_TXN_SEQ_NO;
@@ -407,7 +424,7 @@ impl Engine {
       return Ok(current_seq_no);
     }
 
-    // get lastest unmerged file id
+    // get latest unmerged file id
     let mut has_merged = false;
     let mut non_merge_fid = 0;
     let merge_fin_file = self.options.dir_path.join(MERGE_FINISHED_FILE_NAME);
@@ -426,7 +443,7 @@ impl Engine {
     let active_file = self.active_data_file.read();
     let old_files = self.old_data_files.read();
 
-    // tranverse each file_id, retrieve data file and load its data
+    // traverse each file_id, retrieve data file and load its data
     for (i, file_id) in self.file_ids.iter().enumerate() {
       // if file_id is less than non_merge_fid, then skip
       if has_merged && *file_id < non_merge_fid {
