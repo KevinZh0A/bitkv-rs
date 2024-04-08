@@ -23,12 +23,12 @@ Bitkv is a high-performance key-value storage system written in Rust. It leverag
 
 - **Efficient Key-Value Storage:** Optimized for fast read and write operations with minimal overhead.
 - **Diverse Index:** Support BTree, Skiplist, BPlusTree index for multiple index strategies.
-- **MemMap files for efficient I/O:**  For fast index reconstruction adn quick startup times
-- **Low latency per item read or written:**
-    - Write latency:  `~ 7 µs`
-    - Read latency:  `~ 3 ns`
+- **MemMap files for efficient I/O:**  To achieve rapid index reconstruction and enhance startup speeds
+- **Low latency per item read or written:** Benchmarks run on a Macintosh with Apple M1 Core:
+    - Write latency:  `~ 3.3 µs`
+    - Read latency:  `~ 370 ns` 
 - **Concurrency Support:**   fine-grained locking minimizes contentions.
-- **WriteBatch transaction:**   commit a batch of write enhance isolation.
+- **WriteBatch transaction:**   commit a batch of writes to ensure atomicity.
 
 
 ## Installation
@@ -37,7 +37,7 @@ To use bitkv in your project, add it as a dependency in your Cargo.toml file:
 
   ```toml
   [dependencies]
-  bitkv = "0.2.1"
+  bitkv-rs = "0.2.1"
   ```
 Then, run cargo build to download and compile bitkv-rs and its dependencies.
 
