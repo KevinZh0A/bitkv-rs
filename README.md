@@ -4,14 +4,9 @@
 
 <div align="center">
 
-
-
 [<img alt="github" src="https://img.shields.io/badge/github-KevinZh0A%2Fbitkv-8da0cb?style=for-the-badge&logo=GitHub&label=github&color=8da0cb" height="22">][Github-url]
-
-[<img alt="Build" src="https://img.shields.io/github/actions/workflow/status/KevinZh0A/bitkv-rs/rust.yml?branch=main&style=for-the-badge&logo=Github-Actions&cacheSeconds=3600" height="22">][CI-url]
-
+[<img alt="Build" src="https://img.shields.io/github/actions/workflow/status/KevinZh0A/bitkv-rs/rust.yml?branch=main&style=for-the-badge&logo=Github-Actions&cacheSeconds= d" height="22">][CI-url]
 [<img alt="Codecov" src="https://img.shields.io/codecov/c/gh/KevinZh0A/bitkv-rs?token=6DNS3IF3MO&style=for-the-badge&logo=codecov" height="22">][codecov-url]
-
 <img alt="GitHub License" src="https://img.shields.io/github/license/KevinZh0A/bitkv-rs?style=for-the-badge&logo=license&label=license" height="22">
 
 An efficient key-value storage engine, designed for fast reading and writing, which is inspired by [Bitcask][bitcask_url].
@@ -22,19 +17,19 @@ See [Introduction](#introduction), [Installation](#installation) and [Usages](#u
 
 ## Introduction
 
-bitkv-rs is a high-performance key-value storage system base in rust, featuring a log-structured filesystem and append-only write approach strategy. Leveraging the Rust's powerful type system and concurrency control model, bitkv-rs offers both safety and speed for data storage operations. Designed with scalability in mind, it supports efficient data retrieval and storage across multiple crates, making it ideal for a wide range of applications, from embedded systems to large-scale, distributed data stores.
+Bitkv is a high-performance key-value storage system written in Rust. It leverages a log-structured design with an append-only write approach to deliver exceptional speed, reliability, and scalability.
 
-## Features
+### Features
 
 - **Efficient Key-Value Storage:** Optimized for fast read and write operations with minimal overhead.
-
-- **Low latency per item read or written:**  
-    - Write latency:  `~ 7 µs` 
+- **Diverse Index:** Support BTree, Skiplist, BPlusTree index for multiple index strategies.
+- **MemMap files for efficient I/O:**  For fast index reconstruction adn quick startup times
+- **Low latency per item read or written:**
+    - Write latency:  `~ 7 µs`
     - Read latency:  `~ 3 ns`
+- **Concurrency Support:**   fine-grained locking minimizes contentions.
+- **WriteBatch transaction:**   commit a batch of write enhance isolation.
 
-- **Type Safety:** Utilizes Rust's strong typing to ensure data integrity.
-- 
-- **Concurrency Support:**  fine-grained locking strategy minimizes contentions and ensures atomicity.
 
 ## Installation
 
@@ -60,14 +55,18 @@ For detailed usage and API documentation, refer to the [bitkv-rs Documentation](
 - [X] Configurable compaction triggers and thresholds
 - [X] WriteBactch transaction
 - [X] Use mmap to read data file that on disk.
-- [ ] Increased use of flatbuffers build options to support faster reading speed
-- [ ] Optimize hintfile storage structure to support the memtable build faster 
+- [X] Optimize hintfile storage structure to support the memtable build faster 
 - [X] Http api server
 - [X] Tests
 - [X] Benchmark
-- [ ] Documentation
-- [ ] Handle database corruption
-- [ ] Extend protocol support for Redis
+- [ ] Documentation 
+- [ ] Increased use of flatbuffers option to support faster reading speed
+- [ ] Extend support for Redis Data Types
+
+## Contribution
+
+Contributions to this project are welcome! If you find any issues or have suggestions for improvements, please raise an issue or submit a pull request.
+
 
 #### License
 

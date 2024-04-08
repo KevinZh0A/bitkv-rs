@@ -252,30 +252,28 @@ mod tests {
     std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
   }
 
-  // #[test]
-  // fn test_write_batch_3() {
-  //     let mut opt = Options::default();
-  //     opt.dir_path = PathBuf::from("/tmp/bitkv-rs-batch-2");
-  //     opt.data_file_size = 64 * 1024 * 1024; // 64MB
-  //     let engine = Engine::open(opt.clone()).expect("fail to open engine");
+  #[test]
+  fn test_write_batch_3() {
+    let mut opt = Options::default();
+    opt.dir_path = PathBuf::from("/tmp/bitkv-rs-batch-2");
+    opt.data_file_size = 64 * 1024 * 1024; // 64MB
+    let engine = Engine::open(opt.clone()).expect("fail to open engine");
 
-  //     let mut wb_opts = WriteBatchOptions::default();
-  //     wb_opts.max_batch_num = 10000000;
-  //     let wb = engine
-  //         .new_write_batch(wb_opts)
-  //         .expect("fail to create write batch");
+    let mut wb_opts = WriteBatchOptions::default();
+    wb_opts.max_batch_num = 10000000;
+    let wb = engine
+      .new_write_batch(wb_opts)
+      .expect("fail to create write batch");
 
-  //     println!("{:#?}", engine.list_keys());
+    for i in 0..=1000000 {
+      let put_res = wb.put(get_test_key(i), get_test_value(i));
+      assert!(put_res.is_ok());
+    }
 
-  //     for i in 0..=1000000 {
-  //         let put_res = wb.put(get_test_key(i), get_test_value(i));
-  //         assert!(put_res.is_ok());
-  //     }
+    let commit_res1 = wb.commit();
+    assert!(commit_res1.is_ok());
 
-  //     let commit_res1 = wb.commit();
-  //     assert!(commit_res1.is_ok());
-
-  //     // // delete tested files
-  //     // std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
-  // }
+    // delete tested files
+    std::fs::remove_dir_all(opt.clone().dir_path).expect("failed to remove dir");
+  }
 }

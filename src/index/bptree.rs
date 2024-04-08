@@ -429,4 +429,148 @@ mod tests {
 
     fs::remove_dir_all(path).unwrap();
   }
+
+  #[test]
+  fn test_bptree_iterator_rewind() {
+    let path = PathBuf::from("/tmp/bptree-iterator-rewind");
+    fs::create_dir_all(&path).unwrap();
+    let bptree = BPlusTree::new(&path);
+
+    let res1 = bptree.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res1.is_none());
+
+    let res2 = bptree.put(
+      "acdd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1233,
+        size: 12,
+      },
+    );
+    assert!(res2.is_none());
+
+    let res3 = bptree.put(
+      "bbae".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1234,
+        size: 12,
+      },
+    );
+    assert!(res3.is_none());
+
+    let mut iter1 = bptree.iterator(IteratorOptions::default());
+    while let Some((key, _)) = iter1.next() {
+      assert!(!key.is_empty());
+    }
+
+    iter1.rewind();
+    while let Some((key, _)) = iter1.next() {
+      assert!(!key.is_empty());
+    }
+
+    fs::remove_dir_all(path).unwrap();
+  }
+
+  #[test]
+  fn test_bptree_iterator_seek() {
+    let path = PathBuf::from("/tmp/bptree-iterator-seek");
+    fs::create_dir_all(&path).unwrap();
+    let bptree = BPlusTree::new(&path);
+
+    let res1 = bptree.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res1.is_none());
+
+    let res2 = bptree.put(
+      "acdd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1233,
+        size: 12,
+      },
+    );
+    assert!(res2.is_none());
+
+    let res3 = bptree.put(
+      "bbae".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1234,
+        size: 12,
+      },
+    );
+    assert!(res3.is_none());
+
+    let mut iter1 = bptree.iterator(IteratorOptions::default());
+    iter1.seek("acdd".as_bytes().to_vec());
+    let (key, _) = iter1.next().unwrap();
+    assert_eq!(key, "acdd".as_bytes());
+
+    fs::remove_dir_all(path).unwrap();
+  }
+
+  #[test]
+  fn test_bptree_iterator_next() {
+    let path = PathBuf::from("/tmp/bptree-iterator-next");
+    fs::create_dir_all(&path).unwrap();
+    let bptree = BPlusTree::new(&path);
+
+    let res1 = bptree.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res1.is_none());
+
+    let res2 = bptree.put(
+      "acdd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1233,
+        size: 12,
+      },
+    );
+    assert!(res2.is_none());
+
+    let res3 = bptree.put(
+      "bbae".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1234,
+        size: 12,
+      },
+    );
+    assert!(res3.is_none());
+
+    let mut iter1 = bptree.iterator(IteratorOptions::default());
+    let (key1, _) = iter1.next().unwrap();
+    assert_eq!(key1, "aacd".as_bytes());
+
+    let (key2, _) = iter1.next().unwrap();
+    assert_eq!(key2, "acdd".as_bytes());
+
+    let (key3, _) = iter1.next().unwrap();
+    assert_eq!(key3, "bbae".as_bytes());
+
+    assert!(iter1.next().is_none());
+
+    fs::remove_dir_all(path).unwrap();
+  }
 }
