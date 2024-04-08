@@ -26,7 +26,7 @@ const MERGE_DIR_NAME: &str = "merge";
 const MERGE_FIN_KEY: &[u8] = "merge.finished".as_bytes();
 
 impl Engine {
-  /// merge data directories, produce valid data and create hint fi
+  /// merge data directories, produce valid data and create hint file
   pub fn merge(&self) -> Result<()> {
     // if engine is empty, just return
     if self.is_engine_empty() {

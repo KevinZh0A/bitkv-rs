@@ -366,4 +366,141 @@ mod tests {
       assert!(!key.is_empty());
     }
   }
+
+  #[test]
+  fn test_skl_iterator_rewind() {
+    let skl = SkipList::new();
+
+    let res1 = skl.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res1.is_none());
+
+    let res2 = skl.put(
+      "acdd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1233,
+        size: 12,
+      },
+    );
+    assert!(res2.is_none());
+
+    let res3 = skl.put(
+      "bbae".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1234,
+        size: 12,
+      },
+    );
+    assert!(res3.is_none());
+
+    let mut iter1 = skl.iterator(IteratorOptions::default());
+    let mut iter2 = skl.iterator(IteratorOptions::default());
+    iter1.next();
+    iter1.next();
+    iter1.rewind();
+    iter2.next();
+    iter2.next();
+    iter2.rewind();
+    let mut count = 0;
+    while let Some((key, _)) = iter1.next() {
+      count += 1;
+      assert!(!key.is_empty());
+    }
+    assert_eq!(count, 3);
+  }
+
+  #[test]
+  fn test_skl_iterator_seek() {
+    let skl = SkipList::new();
+
+    let res1 = skl.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res1.is_none());
+
+    let res2 = skl.put(
+      "acdd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1233,
+        size: 12,
+      },
+    );
+    assert!(res2.is_none());
+
+    let res3 = skl.put(
+      "bbae".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1234,
+        size: 12,
+      },
+    );
+    assert!(res3.is_none());
+
+    let mut iter1 = skl.iterator(IteratorOptions::default());
+    iter1.seek(b"acdd".to_vec());
+    let mut count = 0;
+    while let Some((key, _)) = iter1.next() {
+      count += 1;
+      assert!(!key.is_empty());
+    }
+    assert_eq!(count, 2);
+  }
+
+  #[test]
+  fn test_bptree_iterator_next() {
+    let skl = SkipList::new();
+
+    let res1 = skl.put(
+      "aacd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1232,
+        size: 12,
+      },
+    );
+    assert!(res1.is_none());
+
+    let res2 = skl.put(
+      "acdd".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1233,
+        size: 12,
+      },
+    );
+    assert!(res2.is_none());
+
+    let res3 = skl.put(
+      "bbae".as_bytes().to_vec(),
+      LogRecordPos {
+        file_id: 1123,
+        offset: 1234,
+        size: 12,
+      },
+    );
+    assert!(res3.is_none());
+
+    let mut iter1 = skl.iterator(IteratorOptions::default());
+    let mut count = 0;
+    while let Some((key, _)) = iter1.next() {
+      count += 1;
+      assert!(!key.is_empty());
+    }
+    assert_eq!(count, 3);
+  }
 }

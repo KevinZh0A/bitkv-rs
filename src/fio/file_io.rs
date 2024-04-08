@@ -151,4 +151,26 @@ mod tests {
     let res3 = fs::remove_file(path);
     assert!(res3.is_ok());
   }
+
+  #[test]
+  fn test_file_io_size() {
+    let path = PathBuf::from("/tmp/d.data");
+    let fio_res = FileIO::new(&path);
+    assert!(fio_res.is_ok());
+
+    let fio = fio_res.ok().unwrap();
+    let res1 = fio.write("key-a".as_bytes());
+    assert!(res1.is_ok());
+    assert_eq!(5, res1.ok().unwrap());
+
+    let res2 = fio.write("key-b".as_bytes());
+    assert!(res2.is_ok());
+    assert_eq!(5, res2.ok().unwrap());
+
+    let size = fio.size();
+    assert_eq!(10, size);
+
+    let res3 = fs::remove_file(path);
+    assert!(res3.is_ok());
+  }
 }

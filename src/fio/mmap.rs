@@ -103,4 +103,37 @@ mod tests {
     let remove_res = fs::remove_file(&path);
     assert!(remove_res.is_ok());
   }
+
+  #[test]
+  fn test_mmap_size() {
+    let path = PathBuf::from("/tmp/mmap-test.data");
+
+    // file is empty
+    let mmap_res1 = MMapIO::new(&path);
+    assert!(mmap_res1.is_ok());
+    let mmap_io1 = mmap_res1.ok().unwrap();
+    let mut buf1 = [0u8; 10];
+    let read_res1 = mmap_io1.read(&mut buf1, 0);
+    assert!(read_res1.is_err());
+
+    let size1 = mmap_io1.size();
+    assert_eq!(0, size1);
+
+    let fio_res = FileIO::new(&path);
+    assert!(fio_res.is_ok());
+    let fio = fio_res.ok().unwrap();
+    fio.write(b"hello world").unwrap();
+    fio.write(b"good morning").unwrap();
+    fio.write(b"seeyou again").unwrap();
+
+    // file is not empty
+    let mmap_res2 = MMapIO::new(&path);
+    assert!(mmap_res2.is_ok());
+    let mmap_io2 = mmap_res2.ok().unwrap();
+    let size2 = mmap_io2.size();
+    assert_eq!(35, size2);
+
+    let remove_res = fs::remove_file(&path);
+    assert!(remove_res.is_ok());
+  }
 }
