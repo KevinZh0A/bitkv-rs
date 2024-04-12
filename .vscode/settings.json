@@ -10,5 +10,9 @@
         "BPTREE",
         "skiplist"
     ],
-    "C_Cpp.intelliSenseEngineFallback": "enabled"
+    "C_Cpp.intelliSenseEngineFallback": "enabled",
+    "translation.baidu.appId": "20240412002021893",
+    "translation.baidu.appKey": "hDj9iff0SxzfKkK3Kabx",
+    "translation.google.apiKey": "AIzaSyAiNMe7KJ7EafXEbZxSfraGK0ksfd_q9hg",
+    "commentTranslate.source": "Google"
 }

@@ -1,14 +1,23 @@
 #[cfg(test)]
 mod test;
 
-use actix_web::{delete, get, post, web, App, HttpResponse, HttpServer, Responder, Scope};
+use actix_web::{
+  delete, get, post, rt::signal, web, App, HttpResponse, HttpServer, Responder, Scope,
+};
 use bitkv_rs::{db::Engine, errors::Errors, option::Options};
 use serde_json::json;
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+  collections::HashMap,
+  path::PathBuf,
+  sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+  },
+};
 use surf::post as surf_post; // 为避免与 actix_web 的 post 宏冲突
 use tokio::{
   io::{self, AsyncBufReadExt, BufReader},
-  sync::Notify,
+  sync::broadcast,
 };
 
 #[post("/put")]
@@ -123,11 +132,19 @@ async fn run_server(engine: Arc<Engine>) -> std::io::Result<()> {
         .service(stat_handler),
     )
   })
-  .bind("127.0.0.1:8080")?
+  .bind("127.0.0.1:8080")
+  .unwrap()
   .run();
 
-  server.await?;
-  Ok(())
+  server.await
+}
+
+async fn listen_for_enter_key() {
+  let stdin = io::stdin();
+  let reader = BufReader::new(stdin);
+  let mut lines = reader.lines();
+
+  lines.next_line().await.unwrap();
 }
 
 #[tokio::main]
@@ -139,16 +156,11 @@ async fn main() -> std::io::Result<()> {
     })
     .unwrap(),
   );
-  let shutdown_notify = Arc::new(Notify::new());
 
-  let shutdown_notify_for_server = shutdown_notify.clone();
+  let is_shutdown = Arc::new(AtomicBool::new(false));
+  let (shutdown_sender, mut shutdown_receiver) = broadcast::channel::<()>(10);
   let engine_for_server = engine.clone();
-
-  let server_handle = tokio::spawn(async move {
-    if let Err(e) = run_server(engine_for_server).await {
-      eprintln!("Server error: {}", e);
-    }
-  });
+  let server_handle = tokio::spawn(async move { run_server(engine_for_server).await });
 
   tokio::spawn(async move {
     if let Err(e) = send_request().await {
@@ -156,23 +168,29 @@ async fn main() -> std::io::Result<()> {
     }
   });
 
-  let stdin = io::stdin();
-  let reader = BufReader::new(stdin);
-  let mut lines = reader.lines();
+  let shutdown_handle = tokio::spawn(async move {
+    tokio::select! {
+      _ = signal::ctrl_c() => { // Listen for the Enter key as the shutdown signal
+        println!("Receive the Ctrl+C shutdown signal, the server starts to close ...");
+      },
+      _ = listen_for_enter_key() => { // Listen for Ctrl+C as the shutdown signal
+        println! ("Receive the Enter key to stop signal, the server starts to close ...");
+      },
+    }
 
-  if let Ok(Some(_)) = lines.next_line().await {
-    shutdown_notify_for_server.notify_one();
-  }
+    is_shutdown.store(true, Ordering::SeqCst);
+    let _ = shutdown_sender.send(());
+  });
 
-  let _ = server_handle.await;
+  let _ = shutdown_receiver.recv().await;
 
-  // Wait for user input to trigger the shutdown.
-  shutdown_notify_for_server.notified().await;
+  server_handle.abort();
 
   if let Err(e) = engine.close() {
     eprintln!("failed to close engine: {}", e);
   }
 
+  let _ = shutdown_handle.abort();
   println!("engine is closed");
 
   Ok(())
