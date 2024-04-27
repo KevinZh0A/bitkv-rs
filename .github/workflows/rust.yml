@@ -67,7 +67,7 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/cache@v2
         with:
           path: |
@@ -129,7 +129,7 @@ jobs:
         with:
           toolchain: ${{ env.nightly }}
           override: true
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
       - name: Generate documentation
         run: cargo doc --lib --no-deps --all-features --document-private-items
         env:
