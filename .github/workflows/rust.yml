@@ -115,7 +115,7 @@ jobs:
           command: tarpaulin
           args: --all-features --run-types tests --run-types doctests --workspace --out xml -- --test-threads 1
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v4.3.0
+        uses: codecov/codecov-action@v4.3.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
